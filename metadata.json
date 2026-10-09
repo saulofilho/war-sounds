@@ -1,0 +1,7 @@
+{
+  "name": "Trincheira 1944: Experiência Sonora & Museu Didático",
+  "description": "Simulador imersivo de trincheira da 2ª Guerra Mundial com síntese sonora realista de armas, aviões, tanques e artilharia, e acervo histórico didático.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
