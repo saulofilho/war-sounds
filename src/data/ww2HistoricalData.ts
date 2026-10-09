@@ -3,6 +3,13 @@
  * Detailed historical facts, sound mechanics, battle contexts, and acoustic science.
  */
 
+import trenchPanoramicImg from '../assets/images/ww2_trench_dugout_panoramic_1791568859285.jpg';
+import stalingradImg from '../assets/images/ww2_stalingrad_rubble_trench_1791568870090.jpg';
+import normandyImg from '../assets/images/ww2_normandy_bocage_trench_1791568879395.jpg';
+import monteCasteloImg from '../assets/images/ww2_feb_monte_castelo_italy_1791568888567.jpg';
+
+export { trenchPanoramicImg, stalingradImg, normandyImg, monteCasteloImg };
+
 export interface SoundItem {
   id: string;
   name: string;
@@ -337,7 +344,7 @@ export const BATTLE_SCENARIOS: BattleScenario[] = [
     title: 'Batalha de Stalingrado (1942–1943)',
     year: 'Setembro 1942 – Fevereiro 1943',
     location: 'Rio Volga, URSS',
-    image: '/src/assets/images/ww2_stalingrad_rubble_trench_1791568870090.jpg',
+    image: stalingradImg,
     summary: 'A virada definitiva do front oriental em um combate brutal entre escombros de fábricas, trincheiras escavadas em crateras de bombas e o inverno soviético implacável.',
     trenchType: 'Trincheiras Urbanas & Galerias em Ruínas Industriais ("Rattenkrieg")',
     tacticalConditions: [
@@ -360,7 +367,7 @@ export const BATTLE_SCENARIOS: BattleScenario[] = [
     title: 'Normandia: Dia D & Bocage (1944)',
     year: 'Junho – Julho de 1944',
     location: 'Normandia, França',
-    image: '/src/assets/images/ww2_normandy_bocage_trench_1791568879395.jpg',
+    image: normandyImg,
     summary: 'O desembarque aliado nas praias e o avanço claustrofóbico através do "Bocage": labirinto de sebes vivas milenares fortificadas com trincheiras alemãs e ninhos de MG 42.',
     trenchType: 'Trincheiras de Sebes Vivas (Bocage) e Bunkers Costeiros',
     tacticalConditions: [
@@ -383,7 +390,7 @@ export const BATTLE_SCENARIOS: BattleScenario[] = [
     title: 'Batalha de Monte Castelo (1944–1945)',
     year: 'Novembro 1944 – Fevereiro 1945',
     location: 'Apeninos Setentrionais, Itália',
-    image: '/src/assets/images/ww2_feb_monte_castelo_italy_1791568888567.jpg',
+    image: monteCasteloImg,
     summary: 'O heroico batismo de fogo e a vitória da Força Expedicionária Brasileira (FEB) nas trincheiras gélidas da Linha Gótica alemã nos Montes Apeninos.',
     trenchType: 'Dugouts Montanhosos e Trincheiras em Solo Rochoso Congelado',
     tacticalConditions: [
@@ -406,7 +413,7 @@ export const BATTLE_SCENARIOS: BattleScenario[] = [
     title: 'Batalha do Bulge / Ardenas (1944–1945)',
     year: 'Dezembro 1944 – Janeiro 1945',
     location: 'Florestas das Ardenas, Bélgica e Luxemburgo',
-    image: '/src/assets/images/ww2_trench_dugout_panoramic_1791568859285.jpg',
+    image: trenchPanoramicImg,
     summary: 'A última grande contraofensiva de Hitler no front ocidental. Paraquedistas e infantaria americana cercados em trincheiras geladas nas florestas sob bombardeio de estilhaços nas árvores.',
     trenchType: 'Foxholes (Covas de Raposa) em Floresta de Pinheiros Coberta de Neve',
     tacticalConditions: [

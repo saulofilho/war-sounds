@@ -13,7 +13,14 @@ import {
   Layers,
 } from 'lucide-react';
 import { soundEngine } from '../services/audioEngine';
-import { SOUND_ITEMS, SoundItem } from '../data/ww2HistoricalData';
+import {
+  SOUND_ITEMS,
+  SoundItem,
+  trenchPanoramicImg,
+  stalingradImg,
+  normandyImg,
+  monteCasteloImg,
+} from '../data/ww2HistoricalData';
 import { SoundTriggerGrid } from './SoundTriggerGrid';
 
 interface TrenchSimulatorProps {
@@ -48,10 +55,10 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
 
   // Background image mapping
   const envImages: Record<TrenchEnvironment, string> = {
-    standard: '/src/assets/images/ww2_trench_dugout_panoramic_1791568859285.jpg',
-    stalingrad: '/src/assets/images/ww2_stalingrad_rubble_trench_1791568870090.jpg',
-    normandy: '/src/assets/images/ww2_normandy_bocage_trench_1791568879395.jpg',
-    'monte-castelo': '/src/assets/images/ww2_feb_monte_castelo_italy_1791568888567.jpg',
+    standard: trenchPanoramicImg,
+    stalingrad: stalingradImg,
+    normandy: normandyImg,
+    'monte-castelo': monteCasteloImg,
   };
 
   const envTitles: Record<TrenchEnvironment, { title: string; subtitle: string }> = {
