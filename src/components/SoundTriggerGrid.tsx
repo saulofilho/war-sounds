@@ -1,5 +1,15 @@
 import React from 'react';
-import { Play, Info, ShieldAlert, Crosshair, Plane, Bomb, Target } from 'lucide-react';
+import {
+  Play,
+  Info,
+  ShieldAlert,
+  Crosshair,
+  Plane,
+  Bomb,
+  Headphones,
+  Zap,
+  Volume2,
+} from 'lucide-react';
 import { SOUND_ITEMS, SoundItem } from '../data/ww2HistoricalData';
 
 interface SoundTriggerGridProps {
@@ -12,6 +22,10 @@ interface SoundTriggerGridProps {
   onDistanceChange: (dist: 'near' | 'mid' | 'far') => void;
   pan: number;
   onPanChange: (pan: number) => void;
+  isBinaural: boolean;
+  onToggleBinaural: () => void;
+  firingMode: 'burst' | 'single';
+  onFiringModeChange: (mode: 'burst' | 'single') => void;
 }
 
 export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
@@ -24,6 +38,10 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
   onDistanceChange,
   pan,
   onPanChange,
+  isBinaural,
+  onToggleBinaural,
+  firingMode,
+  onFiringModeChange,
 }) => {
   const filteredItems = SOUND_ITEMS.filter((item) => {
     if (category === 'all') return true;
@@ -46,7 +64,7 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
   return (
     <div className="space-y-6">
       {/* Sound Controls Header: Category Tabs & Acoustic Parameters */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-stone-800 pb-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-stone-800 pb-4">
         {/* Category Filter Tabs */}
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-900/90 rounded-lg border border-stone-800">
           <button
@@ -105,10 +123,40 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
           </button>
         </div>
 
-        {/* Spatial Acoustic Settings (Distance & Pan) */}
+        {/* Spatial Acoustic Settings & Firing Mode */}
         <div className="flex flex-wrap items-center gap-4 text-xs text-stone-300">
+          {/* Firing Mode Selector */}
           <div className="flex items-center gap-2">
-            <span className="text-stone-400">Distância Acústica:</span>
+            <span className="text-stone-400">Cadência:</span>
+            <div className="flex items-center p-0.5 bg-stone-900 border border-stone-800 rounded">
+              <button
+                onClick={() => onFiringModeChange('burst')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  firingMode === 'burst'
+                    ? 'bg-stone-700 text-amber-400 font-semibold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+                title="Rajada completa com todas as munições"
+              >
+                Rajada Completa
+              </button>
+              <button
+                onClick={() => onFiringModeChange('single')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  firingMode === 'single'
+                    ? 'bg-stone-700 text-amber-400 font-semibold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+                title="Tiro único ou rajada curta controlada"
+              >
+                Tiro Controlado (1x)
+              </button>
+            </div>
+          </div>
+
+          {/* Distance Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-stone-400">Distância:</span>
             <div className="flex items-center p-0.5 bg-stone-900 border border-stone-800 rounded">
               <button
                 onClick={() => onDistanceChange('near')}
@@ -117,9 +165,9 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
                     ? 'bg-stone-700 text-stone-100 font-semibold'
                     : 'text-stone-400 hover:text-stone-200'
                 }`}
-                title="Próximo da trincheira (<50m): frequências plenas e impacto nítido"
+                title="Próximo da trincheira (<50m)"
               >
-                Próxima (50m)
+                50m
               </button>
               <button
                 onClick={() => onDistanceChange('mid')}
@@ -128,9 +176,9 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
                     ? 'bg-stone-700 text-stone-100 font-semibold'
                     : 'text-stone-400 hover:text-stone-200'
                 }`}
-                title="Terra de Ninguém (300m): atenuação média"
+                title="Terra de Ninguém (300m)"
               >
-                Média (300m)
+                300m
               </button>
               <button
                 onClick={() => onDistanceChange('far')}
@@ -139,16 +187,31 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
                     ? 'bg-stone-700 text-stone-100 font-semibold'
                     : 'text-stone-400 hover:text-stone-200'
                 }`}
-                title="Horizonte distante (3km): corte passa-baixas e atraso natural"
+                title="Horizonte distante (3km)"
               >
-                Horizonte (3km)
+                3km
               </button>
             </div>
           </div>
 
+          {/* Binaural 3D Headphone mode */}
+          <button
+            onClick={onToggleBinaural}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border transition-colors ${
+              isBinaural
+                ? 'bg-emerald-950/70 border-emerald-700/60 text-emerald-300 font-semibold'
+                : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+            }`}
+            title="Ativar modelo espacial HRTF para fones de ouvido"
+          >
+            <Headphones className="h-3.5 w-3.5" />
+            <span>Áudio 3D HRTF</span>
+          </button>
+
+          {/* Pan Slider */}
           <div className="flex items-center gap-2">
-            <span className="text-stone-400">Posição:</span>
-            <span className="text-[11px] text-stone-400">Esq</span>
+            <span className="text-stone-400">Setor:</span>
+            <span className="text-[11px] text-stone-500">Esq</span>
             <input
               type="range"
               min="-1"
@@ -159,7 +222,7 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
               className="w-16 h-1.5 bg-stone-800 accent-amber-500 rounded cursor-pointer"
               title="Posicionamento estéreo no setor da trincheira"
             />
-            <span className="text-[11px] text-stone-400">Dir</span>
+            <span className="text-[11px] text-stone-500">Dir</span>
           </div>
         </div>
       </div>
@@ -177,7 +240,6 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
                   : 'border-stone-800/90 bg-stone-900/50 hover:border-stone-700 hover:bg-stone-900'
               }`}
             >
-              {/* Top Row: Category & Faction unboxed text */}
               <div>
                 <div className="flex items-center justify-between text-xs text-stone-400 mb-2">
                   <span className="flex items-center gap-1.5 font-medium text-stone-300">
@@ -194,7 +256,6 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
                   </div>
                 </div>
 
-                {/* Primary Title */}
                 <h3 className="font-display text-base font-bold text-stone-100 group-hover:text-amber-400 transition-colors">
                   {item.name}
                 </h3>
@@ -202,13 +263,11 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
                   {item.subtitle}
                 </p>
 
-                {/* Acoustic Curiosity Snippet */}
                 <p className="mt-3 text-xs text-stone-300 leading-relaxed line-clamp-2 italic border-l-2 border-stone-700 pl-2.5">
                   "{item.acousticCuriosity}"
                 </p>
               </div>
 
-              {/* Bottom Actions */}
               <div className="mt-4 flex items-center justify-between gap-2 pt-3 border-t border-stone-800/60">
                 <button
                   onClick={() => onPlaySound(item)}

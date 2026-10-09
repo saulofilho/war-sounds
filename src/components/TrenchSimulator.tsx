@@ -11,6 +11,7 @@ import {
   Sparkles,
   Activity,
   Layers,
+  Headphones,
 } from 'lucide-react';
 import { soundEngine } from '../services/audioEngine';
 import {
@@ -39,6 +40,8 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
   const [activeCategory, setActiveCategory] = useState<'all' | 'weapons' | 'planes' | 'tanks' | 'artillery'>('all');
   const [distance, setDistance] = useState<'near' | 'mid' | 'far'>('near');
   const [pan, setPan] = useState<number>(0);
+  const [isBinaural, setIsBinaural] = useState<boolean>(true);
+  const [firingMode, setFiringMode] = useState<'burst' | 'single'>('burst');
   const [activePlayingId, setActivePlayingId] = useState<string | null>(null);
   const [isShaking, setIsShaking] = useState(false);
   const [showMuzzleFlash, setShowMuzzleFlash] = useState(false);
@@ -50,8 +53,9 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
   const [distantWarActive, setDistantWarActive] = useState(false);
   const [radioActive, setRadioActive] = useState(false);
 
-  // Canvas ref for weather / particle simulation
+  // Canvas refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const visualizerCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Background image mapping
   const envImages: Record<TrenchEnvironment, string> = {
@@ -98,8 +102,12 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
     };
     window.addEventListener('resize', onResize);
 
-    // Particles for rain or snow
-    const particlesCount = environment === 'normandy' || rainActive ? 120 : environment === 'stalingrad' || environment === 'monte-castelo' ? 70 : 40;
+    const particlesCount =
+      environment === 'normandy' || rainActive
+        ? 120
+        : environment === 'stalingrad' || environment === 'monte-castelo'
+        ? 70
+        : 40;
     const particles = Array.from({ length: particlesCount }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
@@ -112,7 +120,6 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Render rain or snow particles
       const isSnow = environment === 'stalingrad' || environment === 'monte-castelo';
       const isRain = environment === 'normandy' || rainActive;
 
@@ -148,11 +155,10 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
         });
       }
 
-      // Distant smoke plume embers
       if (distantWarActive) {
         ctx.fillStyle = 'rgba(255, 140, 50, 0.35)';
         for (let i = 0; i < 5; i++) {
-          const sparkX = (width * 0.3) + Math.random() * 200;
+          const sparkX = width * 0.3 + Math.random() * 200;
           const sparkY = height * 0.7 - Math.random() * 60;
           ctx.fillRect(sparkX, sparkY, 2, 2);
         }
@@ -168,6 +174,48 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
       window.removeEventListener('resize', onResize);
     };
   }, [environment, rainActive, distantWarActive]);
+
+  // Real-time Audio Spectrum & Radar visualizer
+  useEffect(() => {
+    const vCanvas = visualizerCanvasRef.current;
+    if (!vCanvas) return;
+    const vCtx = vCanvas.getContext('2d');
+    if (!vCtx) return;
+
+    let animId: number;
+    const bufferLength = soundEngine.analyserNode ? soundEngine.analyserNode.frequencyBinCount : 128;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const drawVisualizer = () => {
+      animId = requestAnimationFrame(drawVisualizer);
+      if (!soundEngine.analyserNode) {
+        vCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
+        return;
+      }
+
+      soundEngine.analyserNode.getByteFrequencyData(dataArray);
+
+      vCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
+      const barWidth = (vCanvas.width / (bufferLength * 0.6));
+      let x = 0;
+
+      for (let i = 0; i < bufferLength * 0.6; i++) {
+        const barHeight = (dataArray[i] / 255) * vCanvas.height;
+        const alpha = Math.min(1, Math.max(0.2, dataArray[i] / 200));
+
+        vCtx.fillStyle = `rgba(245, 158, 11, ${alpha})`;
+        vCtx.fillRect(x, vCanvas.height - barHeight, barWidth - 1, barHeight);
+
+        x += barWidth;
+      }
+    };
+
+    drawVisualizer();
+
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, []);
 
   // Ambience toggles
   const handleToggleRain = () => {
@@ -194,7 +242,12 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
     soundEngine.setRadio(next);
   };
 
-  // Play Sound execution
+  const handleToggleBinaural = () => {
+    const next = soundEngine.toggleBinauralMode();
+    setIsBinaural(next);
+  };
+
+  // Play Sound execution with firing mode respect
   const handlePlaySound = (item: SoundItem) => {
     soundEngine.ensureRunning();
     setActivePlayingId(item.id);
@@ -212,16 +265,16 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
 
     switch (item.soundAction) {
       case 'm1garand':
-        soundEngine.playM1Garand(8, true, distance, pan);
+        soundEngine.playM1Garand(firingMode === 'single' ? 1 : 8, firingMode === 'burst', distance, pan);
         break;
       case 'mg42':
-        soundEngine.playMG42(1.2, distance, pan);
+        soundEngine.playMG42(firingMode === 'single' ? 0.45 : 1.4, distance, pan);
         break;
       case 'kar98k':
         soundEngine.playKar98k(distance, pan);
         break;
       case 'thompson':
-        soundEngine.playThompson(8, distance, pan);
+        soundEngine.playThompson(firingMode === 'single' ? 3 : 10, distance, pan);
         break;
       case 'mortar':
         soundEngine.playMortar(distance, pan);
@@ -236,7 +289,7 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
         soundEngine.playB17Formation();
         break;
       case 'tiger1':
-        soundEngine.playTigerI(true, distance, pan);
+        soundEngine.playTigerI(firingMode === 'burst', distance, pan);
         break;
       case 't34':
         soundEngine.playT34(distance, pan);
@@ -245,7 +298,7 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
         soundEngine.playSherman(distance, pan);
         break;
       case 'katyusha':
-        soundEngine.playKatyushaSalvo(10, pan);
+        soundEngine.playKatyushaSalvo(firingMode === 'single' ? 4 : 12, pan);
         break;
       case 'howitzer105':
         soundEngine.playArtilleryBlast(distance, pan);
@@ -258,7 +311,6 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
         break;
     }
 
-    // Reset active indicator after sound finishes
     setTimeout(() => {
       setActivePlayingId((curr) => (curr === item.id ? null : curr));
     }, 1500);
@@ -269,7 +321,6 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
       {/* Hero Visual Trench Diorama */}
       <div className="relative overflow-hidden rounded-xl border border-stone-800 bg-stone-900 shadow-2xl">
         <div className="relative h-80 sm:h-96 md:h-[420px] w-full overflow-hidden">
-          {/* Background image */}
           <img
             src={envImages[environment]}
             alt={envTitles[environment].title}
@@ -277,26 +328,44 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
             referrerPolicy="no-referrer"
           />
 
-          {/* Gradients and atmospheric scrim for legibility */}
           <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/40 to-black/30" />
 
-          {/* Canvas particle weather overlay */}
+          {/* Canvas weather particles */}
           <canvas
             ref={canvasRef}
             className="pointer-events-none absolute inset-0 h-full w-full"
           />
 
-          {/* Muzzle Flash Flashbang effect */}
+          {/* Muzzle flash overlay */}
           {showMuzzleFlash && (
             <div className="pointer-events-none absolute inset-0 bg-amber-400/20 mix-blend-screen animate-muzzle-flash" />
           )}
 
           {/* Trench Periscope Reticle lines */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-30">
-            <div className="h-44 w-44 rounded-full border border-stone-400/50 flex items-center justify-center">
+            <div className="h-48 w-48 rounded-full border border-stone-400/50 flex items-center justify-center">
               <div className="h-full w-[1px] bg-stone-400/50" />
               <div className="w-full h-[1px] bg-stone-400/50 absolute" />
             </div>
+          </div>
+
+          {/* Top Left: Real-time Audio Spectrum & Radar HUD */}
+          <div className="absolute top-4 left-4 z-10 p-2 rounded-lg bg-stone-950/85 backdrop-blur-md border border-stone-800 flex items-center gap-3">
+            <div className="flex flex-col">
+              <span className="text-[10px] uppercase tracking-wider text-stone-400 font-mono flex items-center gap-1">
+                <Activity className="h-3 w-3 text-amber-500" />
+                Radar Acústico
+              </span>
+              <span className="text-[10px] text-stone-500 font-mono">
+                {isBinaural ? 'Modo HRTF 3D' : 'Estéreo Padrão'}
+              </span>
+            </div>
+            <canvas
+              ref={visualizerCanvasRef}
+              width={100}
+              height={26}
+              className="rounded bg-stone-900 border border-stone-800"
+            />
           </div>
 
           {/* Environment Selector Strip on Top Right */}
@@ -351,6 +420,8 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
                 <span>Periscópio Óptico de Trincheira</span>
                 <span aria-hidden="true">·</span>
                 <span>Visada de 180°</span>
+                <span aria-hidden="true">·</span>
+                <span>Eco de Solo: Ativo</span>
               </div>
               <h1 className="font-display text-xl sm:text-2xl md:text-3xl font-bold text-stone-100 text-balance">
                 {envTitles[environment].title}
@@ -459,6 +530,10 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
         onDistanceChange={setDistance}
         pan={pan}
         onPanChange={setPan}
+        isBinaural={isBinaural}
+        onToggleBinaural={handleToggleBinaural}
+        firingMode={firingMode}
+        onFiringModeChange={setFiringMode}
       />
     </div>
   );
