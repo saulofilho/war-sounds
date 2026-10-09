@@ -103,12 +103,12 @@ Este projeto está pronto para publicação direta no **GitHub Pages**!
 
 ### Método 1: Automático via GitHub Actions (Recomendado)
 
-O projeto já inclui o arquivo `.github/workflows/deploy.yml`.
+O projeto já inclui o arquivo `.github/workflows/deploy.yml` e o `package-lock.json`.
 
-1. Crie um repositório no seu GitHub e suba o código (`git push origin main`).
+1. Suba o código para o seu repositório no GitHub (`git add .`, `git commit -m "feat: initial commit"`, `git push origin main`).
 2. Acesse o seu repositório no GitHub: **Settings** > **Pages**.
 3. Na seção **Build and deployment** > **Source**, selecione **GitHub Actions**.
-4. Cada push na branch `main` ou `master` acionará automaticamente a compilação e publicação do site.
+4. Cada push na branch `main` ou `master` acionará automaticamente a compilação e publicação do site sem erros de lockfile.
 
 ### Método 2: Compilação Manual
 
