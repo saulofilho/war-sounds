@@ -12,8 +12,9 @@ import {
   Activity,
   Layers,
   Headphones,
+  Zap,
 } from 'lucide-react';
-import { soundEngine } from '../services/audioEngine';
+import { soundEngine, AcousticEnvironment } from '../services/audioEngine';
 import {
   SOUND_ITEMS,
   SoundItem,
@@ -42,6 +43,8 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
   const [pan, setPan] = useState<number>(0);
   const [isBinaural, setIsBinaural] = useState<boolean>(true);
   const [firingMode, setFiringMode] = useState<'burst' | 'single'>('burst');
+  const [acousticPreset, setAcousticPreset] = useState<AcousticEnvironment>('trenchMud');
+  const [reverbMix, setReverbMix] = useState<number>(0.42);
   const [activePlayingId, setActivePlayingId] = useState<string | null>(null);
   const [isShaking, setIsShaking] = useState(false);
   const [showMuzzleFlash, setShowMuzzleFlash] = useState(false);
@@ -247,6 +250,16 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
     setIsBinaural(next);
   };
 
+  const handleAcousticPresetChange = (preset: AcousticEnvironment) => {
+    setAcousticPreset(preset);
+    soundEngine.setAcousticEnvironment(preset);
+  };
+
+  const handleReverbMixChange = (mix: number) => {
+    setReverbMix(mix);
+    soundEngine.setReverbMix(mix);
+  };
+
   // Play Sound execution with firing mode respect
   const handlePlaySound = (item: SoundItem) => {
     soundEngine.ensureRunning();
@@ -308,6 +321,9 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
         break;
       case 'grenade':
         soundEngine.playGrenade(distance === 'near' ? 'near' : 'mid', pan);
+        break;
+      case 'bulletWhiz':
+        soundEngine.playBulletWhiz(pan < -0.2 ? 'left' : pan > 0.2 ? 'right' : 'center');
         break;
     }
 
@@ -434,7 +450,19 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  soundEngine.ensureRunning();
+                  soundEngine.playBulletWhiz(pan < -0.2 ? 'left' : pan > 0.2 ? 'right' : 'center');
+                  setLastSoundNotice('Projétil 7.92mm supersônico cortando o ar a centímetros do capacete (3D PannerNode)!');
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-stone-900/90 hover:bg-stone-800 text-amber-300 border border-amber-600/50 font-semibold px-3 py-2 text-xs transition-all shadow-md"
+                title="Experimente um projétil supersônico passando zunindo a centímetros da sua cabeça com áudio 3D binaural"
+              >
+                <Zap className="h-3.5 w-3.5 text-amber-400" />
+                <span>Projétil Rasante (3D)</span>
+              </button>
               <button
                 onClick={onOpenBarrageModal}
                 className="flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold px-4 py-2.5 text-xs sm:text-sm transition-all shadow-lg shadow-amber-950/60"
@@ -534,6 +562,10 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
         onToggleBinaural={handleToggleBinaural}
         firingMode={firingMode}
         onFiringModeChange={setFiringMode}
+        acousticPreset={acousticPreset}
+        onAcousticPresetChange={handleAcousticPresetChange}
+        reverbMix={reverbMix}
+        onReverbMixChange={handleReverbMixChange}
       />
     </div>
   );

@@ -1,18 +1,29 @@
 /**
- * WWII Audio Engine: High-Fidelity Procedural Web Audio API Synthesizer (V3 Cinematic Edition)
+ * WWII Audio Engine: High-Fidelity Procedural Web Audio API Synthesizer (V3 Cinematic 3D Spatial Edition)
  * Enhanced with advanced physical acoustic modeling:
- * - Procedural stereo Convolution Reverb Impulse Response (earthen trench & open battlefield reflections)
- * - HRTF 3D Binaural Spatial Audio panning
+ * - Full 3D Positional Audio using Web Audio PannerNode (HRTF binaural spatializer) & AudioListener
+ * - Dynamic moving 3D sound trajectories for aircraft flyovers, diving bombers, arcing artillery, and supersonic bullet whizzes
+ * - Directional trench coning (sound radiation angles and atmospheric occlusion)
+ * - Procedural stereo Convolution Reverb Impulse Response (earthen trench, concrete bunker, open crater field)
  * - Real-time AnalyserNode for audio visualization and acoustic radar
  * - Supersonic Mach cone crack + Chamber gas combustion multi-stage physics
  * - Multi-harmonic engine synthesizers for Rolls-Royce Merlin, Maybach V-12, and Wright radials
- * - Stuka dual-siren aerodynamic flutter tracking dive velocity
+ * - Stuka dual-siren aerodynamic flutter tracking dive velocity in 3D space
  * - M1 Garand ping with steel en-bloc clip resonance and ground bounce
  * - 4-stage Kar98k mechanical bolt manipulation sequence
  * - Multi-layered continuous trench ambience with dynamic rain drips, wind howl, and distance war
  */
 
-class WWIISoundEngine {
+export type AcousticEnvironment = 'trenchMud' | 'bunkerConcrete' | 'openCraterField';
+export type TrenchDirection = 'front' | 'left-flank' | 'right-flank' | 'rear' | 'overhead';
+
+export interface Position3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export class WWIISoundEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private compressorNode: DynamicsCompressorNode | null = null;
@@ -22,6 +33,8 @@ class WWIISoundEngine {
   private isMuted: boolean = false;
   private isInitialized: boolean = false;
   public isBinauralMode: boolean = true;
+  public currentAcousticEnvironment: AcousticEnvironment = 'trenchMud';
+  public reverbMix: number = 0.42;
 
   // Ambience nodes
   private rainNode: AudioNode | null = null;
@@ -70,12 +83,15 @@ class WWIISoundEngine {
     this.analyserNode.fftSize = 256;
     this.analyserNode.smoothingTimeConstant = 0.8;
 
-    // Trench Reverb / Impulse Response
+    // Configure 3D AudioListener representing soldier in trench (ear height 1.7m, facing No Man's Land: -Z)
+    this.updateListenerOrientation(0, 0);
+
+    // Real-world Trench Convolution Reverb
     this.convolverNode = this.ctx.createConvolver();
-    this.convolverNode.buffer = this.generateTrenchImpulseResponse(1.8, 2.2);
+    this.convolverNode.buffer = this.generateTrenchImpulseResponse(this.currentAcousticEnvironment);
 
     this.reverbGain = this.ctx.createGain();
-    this.reverbGain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+    this.reverbGain.gain.setValueAtTime(this.reverbMix, this.ctx.currentTime);
 
     this.convolverNode.connect(this.reverbGain);
     this.reverbGain.connect(this.masterGain);
@@ -95,6 +111,44 @@ class WWIISoundEngine {
       this.ctx.resume();
     }
     return !!this.ctx;
+  }
+
+  /**
+   * Updates AudioListener 3D position and orientation in the trench frame of reference
+   * Soldier stands at x: 0, y: 1.7m, z: 0.
+   * Azimuth: 0 = looking forward into No Man's land; -90 = left flank; +90 = right flank
+   */
+  public updateListenerOrientation(azimuthDeg: number = 0, elevationDeg: number = 0) {
+    if (!this.ctx || !this.ctx.listener) return;
+    const l = this.ctx.listener;
+    const now = this.ctx.currentTime;
+
+    const radAz = (azimuthDeg * Math.PI) / 180;
+    const radEl = (elevationDeg * Math.PI) / 180;
+
+    const fwdX = Math.sin(radAz) * Math.cos(radEl);
+    const fwdY = Math.sin(radEl);
+    const fwdZ = -Math.cos(radAz) * Math.cos(radEl);
+
+    if ('positionX' in l) {
+      l.positionX.setValueAtTime(0, now);
+      l.positionY.setValueAtTime(1.7, now);
+      l.positionZ.setValueAtTime(0, now);
+      l.forwardX.setValueAtTime(fwdX, now);
+      l.forwardY.setValueAtTime(fwdY, now);
+      l.forwardZ.setValueAtTime(fwdZ, now);
+      l.upX.setValueAtTime(0, now);
+      l.upY.setValueAtTime(1, now);
+      l.upZ.setValueAtTime(0, now);
+    } else {
+      const legacyL = l as unknown as { setPosition?: Function; setOrientation?: Function };
+      if (legacyL.setPosition) {
+        legacyL.setPosition(0, 1.7, 0);
+      }
+      if (legacyL.setOrientation) {
+        legacyL.setOrientation(fwdX, fwdY, fwdZ, 0, 1, 0);
+      }
+    }
   }
 
   public setMasterVolume(val: number) {
@@ -120,27 +174,124 @@ class WWIISoundEngine {
     return this.isBinauralMode;
   }
 
+  public setReverbMix(mix: number) {
+    this.reverbMix = Math.max(0, Math.min(1, mix));
+    if (this.reverbGain && this.ctx) {
+      this.reverbGain.gain.setTargetAtTime(this.reverbMix, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  public setAcousticEnvironment(env: AcousticEnvironment) {
+    this.currentAcousticEnvironment = env;
+    if (this.ctx && this.convolverNode) {
+      this.convolverNode.buffer = this.generateTrenchImpulseResponse(env);
+    }
+  }
+
   /**
-   * Generates a stereo impulse response modeling a deep earthen trench with wooden revetments
+   * Generates a stereo impulse response modeling the exact physical acoustics of a WWII trench
+   * Includes discrete ray-traced early reflections (floor duckboards, sandbag parapets, dugout shelters),
+   * resonant cavity modes, and frequency-dependent atmospheric ground-wave damping.
    */
-  private generateTrenchImpulseResponse(durationSec: number = 1.6, decay: number = 2.4): AudioBuffer {
+  private generateTrenchImpulseResponse(environment: AcousticEnvironment = 'trenchMud'): AudioBuffer {
     if (!this.ctx) throw new Error('AudioContext missing');
     const rate = this.ctx.sampleRate;
-    const length = rate * durationSec;
+
+    let durationSec = 2.4;
+    let highDamping = 6.8;
+    let lowDamping = 1.35;
+    let cavityFreq1 = 115;
+    let cavityFreq2 = 235;
+
+    // Early reflection taps: [delayMs, gainLeft, gainRight]
+    let taps: [number, number, number][] = [];
+
+    if (environment === 'trenchMud') {
+      durationSec = 2.4;
+      highDamping = 7.2;
+      lowDamping = 1.35;
+      cavityFreq1 = 112;
+      cavityFreq2 = 228;
+      taps = [
+        [3.8, 0.75, 0.65],
+        [8.4, -0.68, 0.72],
+        [12.2, 0.60, -0.58],
+        [21.5, -0.48, 0.44],
+        [34.0, 0.42, 0.48],
+        [52.0, -0.32, -0.30],
+        [78.0, 0.24, 0.26],
+      ];
+    } else if (environment === 'bunkerConcrete') {
+      durationSec = 1.7;
+      highDamping = 4.2;
+      lowDamping = 2.1;
+      cavityFreq1 = 185;
+      cavityFreq2 = 380;
+      taps = [
+        [2.2, 0.88, 0.82],
+        [4.8, -0.78, 0.80],
+        [9.2, 0.72, -0.70],
+        [15.8, -0.62, 0.65],
+        [24.0, 0.52, -0.55],
+        [42.0, -0.40, 0.42],
+      ];
+    } else {
+      durationSec = 3.2;
+      highDamping = 5.5;
+      lowDamping = 0.95;
+      cavityFreq1 = 80;
+      cavityFreq2 = 160;
+      taps = [
+        [18.0, 0.45, 0.50],
+        [38.0, -0.42, 0.38],
+        [72.0, 0.38, -0.35],
+        [120.0, -0.32, 0.30],
+        [190.0, 0.26, -0.28],
+      ];
+    }
+
+    const length = Math.floor(rate * durationSec);
     const buffer = this.ctx.createBuffer(2, length, rate);
     const left = buffer.getChannelData(0);
     const right = buffer.getChannelData(1);
 
+    // 1. Synthesize discrete ray-traced early reflections
+    taps.forEach(([delayMs, gL, gR]) => {
+      const sampleIdx = Math.floor((delayMs / 1000) * rate);
+      if (sampleIdx < length) {
+        for (let k = 0; k < 18; k++) {
+          const idx = sampleIdx + k;
+          if (idx < length) {
+            const decay = Math.exp(-k * 0.28);
+            left[idx] += gL * decay * (Math.random() * 0.4 + 0.8);
+            right[idx] += gR * decay * (Math.random() * 0.4 + 0.8);
+          }
+        }
+      }
+    });
+
+    // 2. Synthesize continuous frequency-dependent diffuse tail + trench cavity modes
+    let lowFilterL = 0.0;
+    let lowFilterR = 0.0;
+
     for (let i = 0; i < length; i++) {
       const t = i / rate;
-      // Exponential decay envelope with high frequency air damping
-      const envelope = Math.exp(-t * decay);
-      // Discrete early reflection spikes in first 60ms
-      const isEarly = t < 0.06;
-      const spike = isEarly && (i % Math.floor(rate * 0.012) === 0) ? 1.8 : 1.0;
+      const envHigh = Math.exp(-t * highDamping);
+      const envLow = Math.exp(-t * lowDamping);
+      const cavityL = Math.sin(2 * Math.PI * cavityFreq1 * t) * 0.18 * envLow;
+      const cavityR = Math.sin(2 * Math.PI * cavityFreq2 * t) * 0.18 * envLow;
 
-      left[i] = (Math.random() * 2 - 1) * envelope * spike * 0.5;
-      right[i] = (Math.random() * 2 - 1) * envelope * spike * 0.5;
+      const noiseL = Math.random() * 2 - 1;
+      const noiseR = Math.random() * 2 - 1;
+
+      lowFilterL = lowFilterL * 0.88 + noiseL * 0.12;
+      lowFilterR = lowFilterR * 0.88 + noiseR * 0.12;
+
+      const sampleL = (noiseL * envHigh * 0.45 + lowFilterL * envLow * 1.6 + cavityL) * 0.38;
+      const sampleR = (noiseR * envHigh * 0.45 + lowFilterR * envLow * 1.6 + cavityR) * 0.38;
+
+      left[i] += sampleL;
+      right[i] += sampleR;
     }
 
     return buffer;
@@ -165,9 +316,87 @@ class WWIISoundEngine {
   }
 
   /**
-   * Creates an acoustic channel voice with spatialization, distance low-pass, and trench reverb send
+   * Helper to set PannerNode position across modern AudioParam and legacy Web Audio
    */
-  private createVoice(distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0, reverbSendAmount: number = 0.25) {
+  public setPannerPos(panner: PannerNode, x: number, y: number, z: number, time?: number) {
+    if (!this.ctx) return;
+    const t = time ?? this.ctx.currentTime;
+    if ('positionX' in panner) {
+      panner.positionX.setValueAtTime(x, t);
+      panner.positionY.setValueAtTime(y, t);
+      panner.positionZ.setValueAtTime(z, t);
+    } else {
+      const leg = panner as unknown as { setPosition?: Function };
+      if (leg.setPosition) leg.setPosition(x, y, z);
+    }
+  }
+
+  /**
+   * Helper to linearly animate PannerNode position over time (e.g. aircraft flyover)
+   */
+  public rampPannerPos(panner: PannerNode, toX: number, toY: number, toZ: number, endTime: number) {
+    if (!this.ctx) return;
+    if ('positionX' in panner) {
+      panner.positionX.linearRampToValueAtTime(toX, endTime);
+      panner.positionY.linearRampToValueAtTime(toY, endTime);
+      panner.positionZ.linearRampToValueAtTime(toZ, endTime);
+    } else {
+      const leg = panner as unknown as { setPosition?: Function };
+      if (leg.setPosition) leg.setPosition(toX, toY, toZ);
+    }
+  }
+
+  /**
+   * Computes 3D Cartesian coordinates based on distance, pan (-1 to 1) or specific trench directions
+   */
+  public calculateTrenchCoordinates(
+    distance: 'near' | 'mid' | 'far' | number = 'near',
+    panOrDirection: number | TrenchDirection = 0,
+    elevationAngleDeg: number = 0
+  ): Position3D {
+    let radius = 14;
+    if (typeof distance === 'number') {
+      radius = distance;
+    } else if (distance === 'mid') {
+      radius = 70;
+    } else if (distance === 'far') {
+      radius = 280;
+    }
+
+    if (typeof panOrDirection === 'string') {
+      switch (panOrDirection) {
+        case 'front':
+          return { x: 0, y: 1.2, z: -radius };
+        case 'left-flank':
+          return { x: -radius * 0.92, y: 1.2, z: -radius * 0.38 };
+        case 'right-flank':
+          return { x: radius * 0.92, y: 1.2, z: -radius * 0.38 };
+        case 'rear':
+          return { x: 0, y: 1.5, z: radius * 0.75 };
+        case 'overhead':
+          return { x: 0, y: Math.max(45, radius * 0.6), z: -radius * 0.2 };
+      }
+    }
+
+    const angleRad = (panOrDirection * Math.PI) / 2; // -90° (Left Flank) to +90° (Right Flank)
+    const elRad = (elevationAngleDeg * Math.PI) / 180;
+
+    const posX = Math.sin(angleRad) * Math.cos(elRad) * radius;
+    const posY = 1.2 + Math.sin(elRad) * radius;
+    const posZ = -Math.cos(angleRad) * Math.cos(elRad) * radius;
+
+    return { x: posX, y: posY, z: posZ };
+  }
+
+  /**
+   * Creates an acoustic channel voice with true 3D PannerNode spatialization, distance low-pass, and trench reverb send
+   */
+  public createVoice(
+    distance: 'near' | 'mid' | 'far' = 'near',
+    pan: number | TrenchDirection = 0,
+    reverbSendAmount: number = 0.28,
+    customCoords?: Position3D
+  ) {
     if (!this.ensureRunning() || !this.ctx || !this.masterGain) return null;
 
     const ctx = this.ctx;
@@ -181,41 +410,48 @@ class WWIISoundEngine {
       voiceGain.gain.setValueAtTime(1.0, ctx.currentTime);
     } else if (distance === 'mid') {
       distanceFilter.type = 'lowpass';
-      distanceFilter.frequency.setValueAtTime(3600, ctx.currentTime);
-      voiceGain.gain.setValueAtTime(0.72, ctx.currentTime);
+      distanceFilter.frequency.setValueAtTime(3800, ctx.currentTime);
+      voiceGain.gain.setValueAtTime(0.75, ctx.currentTime);
     } else {
       distanceFilter.type = 'lowpass';
-      distanceFilter.frequency.setValueAtTime(950, ctx.currentTime);
-      voiceGain.gain.setValueAtTime(0.45, ctx.currentTime);
+      distanceFilter.frequency.setValueAtTime(980, ctx.currentTime);
+      voiceGain.gain.setValueAtTime(0.48, ctx.currentTime);
     }
 
-    // Panning (HRTF 3D spatializer if binaural, stereo panner otherwise)
-    let pannerNode: StereoPannerNode | PannerNode | null = null;
-    if (this.isBinauralMode && ctx.createPanner) {
-      const p = ctx.createPanner();
-      p.panningModel = 'HRTF';
-      p.distanceModel = 'inverse';
-      p.positionX.setValueAtTime(pan * 4, ctx.currentTime);
-      p.positionY.setValueAtTime(0, ctx.currentTime);
-      p.positionZ.setValueAtTime(distance === 'near' ? -2 : distance === 'mid' ? -8 : -20, ctx.currentTime);
-      pannerNode = p;
-    } else if (ctx.createStereoPanner) {
-      const p = ctx.createStereoPanner();
-      p.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), ctx.currentTime);
-      pannerNode = p;
+    // 3D Cartesian coordinates
+    const coords = customCoords || this.calculateTrenchCoordinates(distance, pan);
+
+    // 3D PannerNode using HRTF binaural algorithm
+    const panner = ctx.createPanner();
+    panner.panningModel = this.isBinauralMode ? 'HRTF' : 'equalpower';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = 3.0; // Distance where listener experiences full volume
+    panner.maxDistance = 2800; // Far battlefield boundary
+    panner.rolloffFactor = 1.15; // Physically realistic natural sound attenuation
+    panner.coneInnerAngle = 120;
+    panner.coneOuterAngle = 240;
+    panner.coneOuterGain = 0.45;
+
+    // Face sound towards the trench listener
+    const len = Math.hypot(coords.x, coords.y - 1.7, coords.z) || 1;
+    const dirX = -coords.x / len;
+    const dirY = -(coords.y - 1.7) / len;
+    const dirZ = -coords.z / len;
+
+    if ('orientationX' in panner) {
+      panner.orientationX.setValueAtTime(dirX, ctx.currentTime);
+      panner.orientationY.setValueAtTime(dirY, ctx.currentTime);
+      panner.orientationZ.setValueAtTime(dirZ, ctx.currentTime);
     }
 
-    // Connect voice chain
+    this.setPannerPos(panner, coords.x, coords.y, coords.z, ctx.currentTime);
+
+    // Chain: Input -> DistanceFilter -> PannerNode -> MasterGain
     voiceGain.connect(distanceFilter);
+    distanceFilter.connect(panner);
+    panner.connect(this.masterGain);
 
-    if (pannerNode) {
-      distanceFilter.connect(pannerNode);
-      pannerNode.connect(this.masterGain);
-    } else {
-      distanceFilter.connect(this.masterGain);
-    }
-
-    // Send to trench convolution reverb
+    // Send to trench convolution reverb for realistic early reflections and soil damping
     if (this.convolverNode && reverbSendAmount > 0) {
       const sendGain = ctx.createGain();
       sendGain.gain.setValueAtTime(reverbSendAmount, ctx.currentTime);
@@ -226,7 +462,9 @@ class WWIISoundEngine {
     return {
       ctx,
       input: voiceGain,
+      panner,
       master: this.masterGain,
+      coords,
     };
   }
 
@@ -235,9 +473,14 @@ class WWIISoundEngine {
   // -------------------------------------------------------------
 
   /**
-   * M1 Garand: Multi-stage supersonic rifle crack + chamber detonation + en-bloc ping & ground bounce
+   * M1 Garand: Multi-stage supersonic rifle crack + chamber detonation + en-bloc ping & ground bounce in 3D
    */
-  public playM1Garand(shots: number = 8, withPing: boolean = true, distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
+  public playM1Garand(
+    shots: number = 8,
+    withPing: boolean = true,
+    distance: 'near' | 'mid' | 'far' = 'near',
+    pan: number | TrenchDirection = 0
+  ) {
     const voice = this.createVoice(distance, pan, 0.35);
     if (!voice) return;
     const { ctx, input } = voice;
@@ -378,7 +621,11 @@ class WWIISoundEngine {
   /**
    * MG 42 "Hitler's Buzzsaw": 1200+ rpm canvas-ripping burst with barrel booster gas chuff
    */
-  public playMG42(burstDurationSec: number = 1.2, distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
+  public playMG42(
+    burstDurationSec: number = 1.2,
+    distance: 'near' | 'mid' | 'far' = 'near',
+    pan: number | TrenchDirection = 0
+  ) {
     const voice = this.createVoice(distance, pan, 0.4);
     if (!voice) return;
     const { ctx, input } = voice;
@@ -431,7 +678,7 @@ class WWIISoundEngine {
   /**
    * Karabiner 98k: Heavy 7.92mm Mauser rifle crack + 4-stage realistic bolt manipulation
    */
-  public playKar98k(distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
+  public playKar98k(distance: 'near' | 'mid' | 'far' = 'near', pan: number | TrenchDirection = 0) {
     const voice = this.createVoice(distance, pan, 0.45);
     if (!voice) return;
     const { ctx, input } = voice;
@@ -475,7 +722,6 @@ class WWIISoundEngine {
     thud.stop(now + 0.28);
 
     // 3. Realistic 4-Stage Bolt Cycle:
-    // A. Handle Lift at +0.62s
     const liftT = now + 0.62;
     const liftOsc = ctx.createOscillator();
     const liftG = ctx.createGain();
@@ -488,7 +734,6 @@ class WWIISoundEngine {
     liftOsc.start(liftT);
     liftOsc.stop(liftT + 0.09);
 
-    // B. Bolt pulled back at +0.8s
     const pullT = now + 0.8;
     const pullOsc = ctx.createOscillator();
     const pullG = ctx.createGain();
@@ -502,7 +747,6 @@ class WWIISoundEngine {
     pullOsc.start(pullT);
     pullOsc.stop(pullT + 0.13);
 
-    // C. Spent brass casing hitting trench wood at +0.98s
     const brassT = now + 0.98;
     const brassOsc = ctx.createOscillator();
     const brassG = ctx.createGain();
@@ -516,7 +760,6 @@ class WWIISoundEngine {
     brassOsc.start(brassT);
     brassOsc.stop(brassT + 0.08);
 
-    // D. Bolt rammed forward & locked at +1.15s
     const lockT = now + 1.15;
     const lockOsc = ctx.createOscillator();
     const lockG = ctx.createGain();
@@ -534,7 +777,11 @@ class WWIISoundEngine {
   /**
    * Thompson M1A1: Heavy .45 ACP submachine gun burst with open-bolt cyclic rattle
    */
-  public playThompson(burstCount: number = 8, distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
+  public playThompson(
+    burstCount: number = 8,
+    distance: 'near' | 'mid' | 'far' = 'near',
+    pan: number | TrenchDirection = 0
+  ) {
     const voice = this.createVoice(distance, pan, 0.3);
     if (!voice) return;
     const { ctx, input } = voice;
@@ -575,15 +822,85 @@ class WWIISoundEngine {
   }
 
   /**
-   * Trench Mortar: Hollow tube thump + ascending/descending flight whistle + crater blast
+   * Supersonic Bullet Whiz / Sniper Near-Miss in 3D:
+   * A high-velocity 7.92mm bullet streaks past the soldier's head in 3D space with sonic crack and wood impact
    */
-  public playMortar(distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
-    const voice = this.createVoice(distance, pan, 0.45);
-    if (!voice) return;
-    const { ctx, input } = voice;
+  public playBulletWhiz(side: 'left' | 'right' | 'center' = 'left') {
+    if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
+    const ctx = this.ctx;
     const now = ctx.currentTime;
 
-    // Tube "plump"
+    const startX = side === 'left' ? -2.2 : side === 'right' ? 2.2 : 0.4;
+    const endX = side === 'left' ? -0.4 : side === 'right' ? 0.4 : -0.2;
+
+    const voice = this.createVoice('near', 0, 0.4, { x: startX, y: 1.85, z: -25 });
+    if (!voice) return;
+    const { input, panner } = voice;
+
+    // Animate bullet trajectory from in front (-25m) past the ear (+0m) into rear parados (+14m)
+    const flightDuration = 0.065;
+    this.rampPannerPos(panner, endX, 1.7, 14, now + flightDuration);
+
+    // 1. Supersonic N-wave sonic boom snap (Mach cone compression)
+    const snapBuf = ctx.createBuffer(1, ctx.sampleRate * 0.015, ctx.sampleRate);
+    const snapData = snapBuf.getChannelData(0);
+    for (let i = 0; i < snapData.length; i++) {
+      const t = i / ctx.sampleRate;
+      snapData[i] = (1 - 2 * t / 0.015) * Math.exp(-t / 0.003);
+    }
+    const snap = ctx.createBufferSource();
+    snap.buffer = snapBuf;
+    const snapGain = ctx.createGain();
+    snapGain.gain.setValueAtTime(1.8, now);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+    snap.connect(snapGain);
+    snapGain.connect(input);
+    snap.start(now);
+    snap.stop(now + 0.025);
+
+    // 2. High-frequency Doppler "Zip-Whistle"
+    const whiz = ctx.createOscillator();
+    const whizGain = ctx.createGain();
+    whiz.type = 'sawtooth';
+    whiz.frequency.setValueAtTime(4600, now);
+    whiz.frequency.exponentialRampToValueAtTime(1250, now + flightDuration);
+    whizGain.gain.setValueAtTime(0.85, now);
+    whizGain.gain.exponentialRampToValueAtTime(0.001, now + flightDuration + 0.02);
+    whiz.connect(whizGain);
+    whizGain.connect(input);
+    whiz.start(now);
+    whiz.stop(now + flightDuration + 0.03);
+
+    // 3. Bullet impacting trench timber / sandbag behind soldier
+    const impactTime = now + flightDuration;
+    const impactBuf = this.createBrownNoiseBuffer(0.18);
+    const impact = ctx.createBufferSource();
+    impact.buffer = impactBuf;
+    const impactFilter = ctx.createBiquadFilter();
+    impactFilter.type = 'lowpass';
+    impactFilter.frequency.setValueAtTime(1400, impactTime);
+    const impactGain = ctx.createGain();
+    impactGain.gain.setValueAtTime(1.1, impactTime);
+    impactGain.gain.exponentialRampToValueAtTime(0.001, impactTime + 0.16);
+
+    impact.connect(impactFilter);
+    impactFilter.connect(impactGain);
+    impactGain.connect(input);
+    impact.start(impactTime);
+    impact.stop(impactTime + 0.18);
+  }
+
+  /**
+   * Trench Mortar: Hollow tube thump + ascending/descending 3D flight whistle + crater blast
+   */
+  public playMortar(distance: 'near' | 'mid' | 'far' = 'near', pan: number | TrenchDirection = 0) {
+    const coords = this.calculateTrenchCoordinates(distance, pan);
+    const voice = this.createVoice(distance, pan, 0.45, coords);
+    if (!voice) return;
+    const { ctx, input, panner } = voice;
+    const now = ctx.currentTime;
+
+    // Tube "plump" launch
     const tubeOsc = ctx.createOscillator();
     const tubeGain = ctx.createGain();
     tubeOsc.type = 'sine';
@@ -597,7 +914,7 @@ class WWIISoundEngine {
     tubeOsc.start(now);
     tubeOsc.stop(now + 0.25);
 
-    // Whistling flight trajectory
+    // High arc flight in 3D: ascends into sky then drops into trench front
     const whistle = ctx.createOscillator();
     const whistleGain = ctx.createGain();
     whistle.type = 'sine';
@@ -606,7 +923,7 @@ class WWIISoundEngine {
     whistle.frequency.exponentialRampToValueAtTime(620, now + 1.6);
 
     whistleGain.gain.setValueAtTime(0.001, now + 0.2);
-    whistleGain.gain.linearRampToValueAtTime(0.28, now + 0.9);
+    whistleGain.gain.linearRampToValueAtTime(0.32, now + 0.9);
     whistleGain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
 
     whistle.connect(whistleGain);
@@ -614,24 +931,39 @@ class WWIISoundEngine {
     whistle.start(now + 0.2);
     whistle.stop(now + 1.65);
 
+    // Elevate panner up in 3D during mid-flight
+    this.rampPannerPos(panner, coords.x, coords.y + 65, coords.z * 0.6, now + 0.9);
+    this.rampPannerPos(panner, coords.x * 0.7, 1.2, -18, now + 1.6);
+
     setTimeout(() => {
-      this.playArtilleryBlast(distance === 'near' ? 'mid' : 'far', pan);
-    }, 1550);
+      this.playArtilleryBlast('near', pan);
+    }, 1580);
   }
 
   // -------------------------------------------------------------
-  // AVIÕES (AIRCRAFT)
+  // AVIÕES (AIRCRAFT IN FULL 3D)
   // -------------------------------------------------------------
 
   /**
-   * Junkers Ju 87 "Stuka": Dual Jericho Trumpet sirens with acoustic waver + Jumo V12 + bomb impact
+   * Junkers Ju 87 "Stuka": Steep 3D dive trajectory from high altitude (380m) screaming downward,
+   * pulling up over the parapet, followed by 500kg bomb detonation
    */
-  public playStukaDive(distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
-    const voice = this.createVoice(distance, pan, 0.5);
-    if (!voice) return;
-    const { ctx, input } = voice;
+  public playStukaDive(distance: 'near' | 'mid' | 'far' = 'near', pan: number | TrenchDirection = 0) {
+    if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
+    const ctx = this.ctx;
     const now = ctx.currentTime;
-    const duration = 4.5;
+    const duration = 4.8;
+
+    // Start dive high up in the cloudy sky
+    const startCoords: Position3D = { x: -45, y: 380, z: -280 };
+    const voice = this.createVoice(distance, pan, 0.55, startCoords);
+    if (!voice) return;
+    const { input, panner } = voice;
+
+    // Animate 3D dive trajectory: screaming dive drops steep towards parapet, then climbs out
+    const divePeakTime = now + 2.85;
+    this.rampPannerPos(panner, 10, 24, -38, divePeakTime); // Point of closest approach / bomb release
+    this.rampPannerPos(panner, 85, 140, 110, now + duration); // Climbing out into the rear sky
 
     // Dual detuned screaming sirens (wing struts)
     const siren1 = ctx.createOscillator();
@@ -642,21 +974,21 @@ class WWIISoundEngine {
     siren2.type = 'square';
 
     siren1.frequency.setValueAtTime(410, now);
-    siren1.frequency.exponentialRampToValueAtTime(1680, now + 2.85);
+    siren1.frequency.exponentialRampToValueAtTime(1680, divePeakTime);
     siren1.frequency.exponentialRampToValueAtTime(260, now + duration);
 
     siren2.frequency.setValueAtTime(425, now);
-    siren2.frequency.exponentialRampToValueAtTime(1710, now + 2.85);
+    siren2.frequency.exponentialRampToValueAtTime(1710, divePeakTime);
     siren2.frequency.exponentialRampToValueAtTime(270, now + duration);
 
     sirenGain.gain.setValueAtTime(0.01, now);
-    sirenGain.gain.exponentialRampToValueAtTime(0.58, now + 2.65);
+    sirenGain.gain.exponentialRampToValueAtTime(0.68, now + 2.65);
     sirenGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.setValueAtTime(750, now);
-    filter.frequency.linearRampToValueAtTime(1850, now + 2.85);
+    filter.frequency.linearRampToValueAtTime(1850, divePeakTime);
     filter.Q.setValueAtTime(3.4, now);
 
     siren1.connect(filter);
@@ -671,10 +1003,10 @@ class WWIISoundEngine {
     const windFilt = ctx.createBiquadFilter();
     windFilt.type = 'bandpass';
     windFilt.frequency.setValueAtTime(650, now);
-    windFilt.frequency.linearRampToValueAtTime(2400, now + 2.85);
+    windFilt.frequency.linearRampToValueAtTime(2400, divePeakTime);
     const windG = ctx.createGain();
     windG.gain.setValueAtTime(0.05, now);
-    windG.gain.linearRampToValueAtTime(0.45, now + 2.65);
+    windG.gain.linearRampToValueAtTime(0.55, now + 2.65);
     windG.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
     windSource.connect(windFilt);
@@ -686,11 +1018,11 @@ class WWIISoundEngine {
     const engineGain = ctx.createGain();
     engineOsc.type = 'sawtooth';
     engineOsc.frequency.setValueAtTime(92, now);
-    engineOsc.frequency.linearRampToValueAtTime(230, now + 2.85);
+    engineOsc.frequency.linearRampToValueAtTime(230, divePeakTime);
     engineOsc.frequency.linearRampToValueAtTime(105, now + duration);
 
     engineGain.gain.setValueAtTime(0.05, now);
-    engineGain.gain.linearRampToValueAtTime(0.48, now + 2.7);
+    engineGain.gain.linearRampToValueAtTime(0.52, now + 2.7);
     engineGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
     engineOsc.connect(engineGain);
@@ -706,29 +1038,35 @@ class WWIISoundEngine {
     engineOsc.stop(now + duration);
     windSource.stop(now + duration);
 
-    // Bomb detonation
+    // Bomb detonation on impact zone
     setTimeout(() => {
       this.playArtilleryBlast('near', pan);
     }, 2850);
   }
 
   /**
-   * Supermarine Spitfire: Harmonically rich Rolls-Royce Merlin V-12 + 8-gun strafe
+   * Supermarine Spitfire: 3D flyover across the trench with Rolls-Royce Merlin V-12 engine
+   * and 8 Browning .303 machine gun strafing pass in full HRTF spatial audio
    */
   public playSpitfire(panFrom: number = -1, panTo: number = 1) {
     if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
-    const duration = 3.6;
+    const duration = 3.8;
 
-    const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-    if (panner) {
-      panner.pan.setValueAtTime(panFrom, now);
-      panner.pan.linearRampToValueAtTime(panTo, now + duration);
-      panner.connect(this.masterGain);
-    }
+    // Initial 3D position: approaching fast from the left front sky
+    const startX = panFrom * 180;
+    const endX = panTo * 180;
+    const startCoords: Position3D = { x: startX, y: 75, z: -140 };
 
-    const dest = panner || this.masterGain;
+    const voice = this.createVoice('near', 0, 0.45, startCoords);
+    if (!voice) return;
+    const { input, panner } = voice;
+
+    // Fly straight overhead across the trench in 3D
+    const peakTime = now + 1.45;
+    this.rampPannerPos(panner, (startX + endX) * 0.1, 24, -10, peakTime);
+    this.rampPannerPos(panner, endX, 85, 160, now + duration);
 
     const fundamental = 165;
     const harmonics = [fundamental, fundamental * 1.5, fundamental * 2, fundamental * 3];
@@ -739,31 +1077,31 @@ class WWIISoundEngine {
       osc.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
 
       osc.frequency.setValueAtTime(freq * 1.15, now);
-      osc.frequency.exponentialRampToValueAtTime(freq * 1.35, now + 1.4);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.35, peakTime);
       osc.frequency.exponentialRampToValueAtTime(freq * 0.75, now + duration);
 
       gain.gain.setValueAtTime(0.01, now);
-      gain.gain.exponentialRampToValueAtTime(0.35 / (idx + 1), now + 1.4);
+      gain.gain.exponentialRampToValueAtTime(0.42 / (idx + 1), peakTime);
       gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
       osc.connect(gain);
-      gain.connect(dest);
+      gain.connect(input);
       osc.start(now);
       osc.stop(now + duration);
     });
 
-    // Strafing machine guns
+    // 8-Gun Browning Strafing burst right when passing overhead
     setTimeout(() => {
-      this.playBrowningBurst();
-    }, 1250);
+      this.playBrowningBurst3D(input);
+    }, 1350);
   }
 
-  private playBrowningBurst() {
-    if (!this.ctx || !this.masterGain) return;
+  private playBrowningBurst3D(dest: AudioNode) {
+    if (!this.ctx) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
-    for (let i = 0; i < 18; i++) {
-      const time = now + i * 0.05;
+    for (let i = 0; i < 22; i++) {
+      const time = now + i * 0.045;
       const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.04, ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let j = 0; j < data.length; j++) {
@@ -772,29 +1110,39 @@ class WWIISoundEngine {
       const noise = ctx.createBufferSource();
       noise.buffer = buffer;
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.48, time);
-      gain.gain.exponentialRampToValueAtTime(0.01, time + 0.045);
+      gain.gain.setValueAtTime(0.55, time);
+      gain.gain.exponentialRampToValueAtTime(0.01, time + 0.04);
 
       noise.connect(gain);
-      gain.connect(this.masterGain);
+      gain.connect(dest);
       noise.start(time);
-      noise.stop(time + 0.05);
+      noise.stop(time + 0.045);
     }
   }
 
   /**
-   * B-17 Flying Fortress Formation: Multi-engine phase beating + cascading bombs
+   * B-17 Flying Fortress Formation: Multi-engine phase beating flying overhead at 350m altitude
+   * with cascading bombs dropping in 3D
    */
   public playB17Formation() {
     if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
-    const duration = 5.6;
+    const duration = 6.2;
+
+    const startCoords: Position3D = { x: 260, y: 350, z: -280 };
+    const voice = this.createVoice('far', 0, 0.5, startCoords);
+    if (!voice) return;
+    const { input, panner } = voice;
+
+    // Sweeps overhead in 3D space
+    this.rampPannerPos(panner, 0, 320, 0, now + 2.8);
+    this.rampPannerPos(panner, -260, 350, 280, now + duration);
 
     const freqs = [76.5, 78.2, 80.0, 81.8];
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.01, now);
-    gain.gain.linearRampToValueAtTime(0.58, now + 2.5);
+    gain.gain.linearRampToValueAtTime(0.65, now + 2.8);
     gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
 
     freqs.forEach((freq) => {
@@ -810,39 +1158,47 @@ class WWIISoundEngine {
       osc.stop(now + duration);
     });
 
-    gain.connect(this.masterGain);
+    gain.connect(input);
 
     setTimeout(() => {
-      this.playBombDropWhistle();
+      this.playBombDropWhistle3D(-0.3);
     }, 1800);
     setTimeout(() => {
-      this.playBombDropWhistle();
-    }, 2300);
+      this.playBombDropWhistle3D(0.4);
+    }, 2400);
     setTimeout(() => {
       this.playArtilleryBlast('far', -0.3);
     }, 3400);
     setTimeout(() => {
       this.playArtilleryBlast('mid', 0.4);
-    }, 4100);
+    }, 4200);
   }
 
-  private playBombDropWhistle() {
-    if (!this.ctx || !this.masterGain) return;
+  private playBombDropWhistle3D(pan: number) {
+    if (!this.ctx) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
+    const voice = this.createVoice('mid', pan, 0.4);
+    if (!voice) return;
+    const { input, panner } = voice;
+
+    // Drop from sky (180m) down to earth (1.5m)
+    const initialCoords = this.calculateTrenchCoordinates('mid', pan, 60);
+    this.setPannerPos(panner, initialCoords.x, initialCoords.y, initialCoords.z, now);
+    this.rampPannerPos(panner, initialCoords.x * 0.8, 1.2, initialCoords.z * 0.8, now + 1.5);
+
     const whistle = ctx.createOscillator();
     const gain = ctx.createGain();
-
     whistle.type = 'sine';
     whistle.frequency.setValueAtTime(3400, now);
     whistle.frequency.exponentialRampToValueAtTime(650, now + 1.5);
 
     gain.gain.setValueAtTime(0.01, now);
-    gain.gain.linearRampToValueAtTime(0.35, now + 0.8);
+    gain.gain.linearRampToValueAtTime(0.38, now + 0.8);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
 
     whistle.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(input);
     whistle.start(now);
     whistle.stop(now + 1.55);
   }
@@ -852,9 +1208,13 @@ class WWIISoundEngine {
   // -------------------------------------------------------------
 
   /**
-   * Tiger I: 23L Maybach V12 diesel rumble + metal track squeals + 88mm KwK 36 cannon fire
+   * Tiger I: 23L Maybach V12 diesel rumble + metal track squeals + 88mm KwK 36 cannon fire in 3D
    */
-  public playTigerI(fireCannon: boolean = true, distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
+  public playTigerI(
+    fireCannon: boolean = true,
+    distance: 'near' | 'mid' | 'far' = 'near',
+    pan: number | TrenchDirection = 0
+  ) {
     const voice = this.createVoice(distance, pan, 0.45);
     if (!voice) return;
     const { ctx, input } = voice;
@@ -907,10 +1267,10 @@ class WWIISoundEngine {
   }
 
   /**
-   * 88mm KwK 36 Cannon: Hypersonic muzzle blast + deep subsonic pressure wave
+   * 88mm KwK 36 Cannon: Hypersonic muzzle blast + deep subsonic pressure wave in 3D
    */
-  public play88mmCannon(distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
-    const voice = this.createVoice(distance, pan, 0.5);
+  public play88mmCannon(distance: 'near' | 'mid' | 'far' = 'near', pan: number | TrenchDirection = 0) {
+    const voice = this.createVoice(distance, pan, 0.65);
     if (!voice) return;
     const { ctx, input } = voice;
     const now = ctx.currentTime;
@@ -947,9 +1307,9 @@ class WWIISoundEngine {
   }
 
   /**
-   * T-34/76: Rugged Soviet Kharkiv V-2 diesel engine clatter + 76.2mm cannon
+   * T-34/76: Rugged Soviet Kharkiv V-2 diesel engine clatter + 76.2mm cannon in 3D
    */
-  public playT34(distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
+  public playT34(distance: 'near' | 'mid' | 'far' = 'near', pan: number | TrenchDirection = 0) {
     const voice = this.createVoice(distance, pan, 0.45);
     if (!voice) return;
     const { ctx, input } = voice;
@@ -978,9 +1338,9 @@ class WWIISoundEngine {
   }
 
   /**
-   * M4 Sherman: Continental Radial engine vibration and 75mm gun
+   * M4 Sherman: Continental Radial engine vibration and 75mm gun in 3D
    */
-  public playSherman(distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
+  public playSherman(distance: 'near' | 'mid' | 'far' = 'near', pan: number | TrenchDirection = 0) {
     const voice = this.createVoice(distance, pan, 0.45);
     if (!voice) return;
     const { ctx, input } = voice;
@@ -1004,19 +1364,33 @@ class WWIISoundEngine {
   }
 
   // -------------------------------------------------------------
-  // EXPLOSÕES & ARTILHARIA (ARTILLERY & EXPLOSIONS)
+  // EXPLOSÕES & ARTILHARIA (ARTILLERY & EXPLOSIONS IN 3D)
   // -------------------------------------------------------------
 
   /**
    * Katyusha BM-13 "Stalin's Organ": Banshee rocket launches in salvo with overlapping whistles
+   * arcing high across the 3D sky
    */
-  public playKatyushaSalvo(salvoCount: number = 10, pan: number = -0.5) {
+  public playKatyushaSalvo(salvoCount: number = 10, pan: number | TrenchDirection = -0.5) {
     if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
 
     for (let i = 0; i < salvoCount; i++) {
       const time = now + i * 0.17;
+      const rocketX = (Math.random() - 0.5) * 80;
+      const rocketVoice = this.createVoice('far', pan, 0.45, {
+        x: rocketX,
+        y: 12,
+        z: -320,
+      });
+      if (!rocketVoice) continue;
+      const { input, panner } = rocketVoice;
+
+      // Rocket screams up into high sky arc then towards impact
+      this.rampPannerPos(panner, rocketX * 0.5, 95, -120, time + 0.45);
+      this.rampPannerPos(panner, rocketX * 0.2, 10, -40, time + 0.9);
+
       const whistle = ctx.createOscillator();
       const whistleGain = ctx.createGain();
       whistle.type = 'sawtooth';
@@ -1025,20 +1399,20 @@ class WWIISoundEngine {
       whistle.frequency.exponentialRampToValueAtTime(420, time + 0.9);
 
       whistleGain.gain.setValueAtTime(0.01, time);
-      whistleGain.gain.linearRampToValueAtTime(0.35, time + 0.3);
+      whistleGain.gain.linearRampToValueAtTime(0.38, time + 0.3);
       whistleGain.gain.exponentialRampToValueAtTime(0.01, time + 0.9);
 
       const hissBuf = this.createBrownNoiseBuffer(0.9);
       const hiss = ctx.createBufferSource();
       hiss.buffer = hissBuf;
       const hissGain = ctx.createGain();
-      hissGain.gain.setValueAtTime(0.35, time);
+      hissGain.gain.setValueAtTime(0.38, time);
       hissGain.gain.exponentialRampToValueAtTime(0.01, time + 0.85);
 
       whistle.connect(whistleGain);
-      whistleGain.connect(this.masterGain);
+      whistleGain.connect(input);
       hiss.connect(hissGain);
-      hissGain.connect(this.masterGain);
+      hissGain.connect(input);
 
       whistle.start(time);
       hiss.start(time);
@@ -1049,17 +1423,17 @@ class WWIISoundEngine {
     setTimeout(() => {
       for (let k = 0; k < 5; k++) {
         setTimeout(() => {
-          this.playArtilleryBlast('far', pan + (Math.random() * 0.4 - 0.2));
+          this.playArtilleryBlast('far', typeof pan === 'number' ? pan + (Math.random() * 0.4 - 0.2) : pan);
         }, k * 240);
       }
     }, 1200);
   }
 
   /**
-   * 105mm Howitzer & Heavy Artillery Blast with shrapnel and seismic rumble
+   * 105mm Howitzer & Heavy Artillery Blast with shrapnel and seismic rumble in 3D
    */
-  public playArtilleryBlast(distance: 'near' | 'mid' | 'far' = 'near', pan: number = 0) {
-    const voice = this.createVoice(distance, pan, 0.6);
+  public playArtilleryBlast(distance: 'near' | 'mid' | 'far' = 'near', pan: number | TrenchDirection = 0) {
+    const voice = this.createVoice(distance, pan, 0.62);
     if (!voice) return;
     const { ctx, input } = voice;
     const now = ctx.currentTime;
@@ -1119,12 +1493,16 @@ class WWIISoundEngine {
   }
 
   /**
-   * Naval Bombardment (16-inch offshore couraçados)
+   * Naval Bombardment (16-inch offshore battleships) in 3D
    */
   public playNavalBombardment() {
     if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
     const ctx = this.ctx;
     const now = ctx.currentTime;
+
+    const voice = this.createVoice('far', -0.6, 0.7);
+    if (!voice) return;
+    const { input } = voice;
 
     const sub = ctx.createOscillator();
     const subGain = ctx.createGain();
@@ -1135,7 +1513,7 @@ class WWIISoundEngine {
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 3.0);
 
     sub.connect(subGain);
-    subGain.connect(this.masterGain);
+    subGain.connect(input);
     sub.start(now);
     sub.stop(now + 3.1);
 
@@ -1143,14 +1521,17 @@ class WWIISoundEngine {
   }
 
   /**
-   * Hand Grenade (Stielhandgranate / Mk 2 Pineapple)
+   * Hand Grenade (Stielhandgranate / Mk 2 Pineapple) in 3D:
+   * Pin pulled in hand, thrown over parapet, detonation in crater
    */
-  public playGrenade(distance: 'near' | 'mid' = 'near', pan: number = 0) {
-    const voice = this.createVoice(distance, pan, 0.5);
+  public playGrenade(distance: 'near' | 'mid' = 'near', pan: number | TrenchDirection = 0) {
+    const throwCoords = { x: 0.3, y: 1.3, z: -0.5 };
+    const voice = this.createVoice(distance, pan, 0.55, throwCoords);
     if (!voice) return;
-    const { ctx, input } = voice;
+    const { ctx, input, panner } = voice;
     const now = ctx.currentTime;
 
+    // Pin pull
     const pin = ctx.createOscillator();
     const pinGain = ctx.createGain();
     pin.type = 'triangle';
@@ -1162,6 +1543,7 @@ class WWIISoundEngine {
     pin.start(now);
     pin.stop(now + 0.1);
 
+    // Fuse burning noise while grenade is thrown into No Man's Land
     const fuseBuf = this.createBrownNoiseBuffer(0.9);
     const fuseNoise = ctx.createBufferSource();
     fuseNoise.buffer = fuseBuf;
@@ -1172,6 +1554,11 @@ class WWIISoundEngine {
     fuseGain.connect(input);
     fuseNoise.start(now);
     fuseNoise.stop(now + 0.95);
+
+    // Animate grenade trajectory arcing over sandbag parapet into crater
+    const landCoords = this.calculateTrenchCoordinates(distance, pan);
+    this.rampPannerPos(panner, landCoords.x * 0.4, 3.5, -8, now + 0.45);
+    this.rampPannerPos(panner, landCoords.x, 0.8, landCoords.z, now + 0.95);
 
     setTimeout(() => {
       this.playArtilleryBlast(distance, pan);

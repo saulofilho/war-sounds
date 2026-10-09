@@ -75,6 +75,9 @@ export const ArsenalMuseumView: React.FC<ArsenalMuseumViewProps> = ({ onOpenDeta
       case 'grenade':
         soundEngine.playGrenade('near', 0);
         break;
+      case 'bulletWhiz':
+        soundEngine.playBulletWhiz('left');
+        break;
     }
 
     setTimeout(() => {

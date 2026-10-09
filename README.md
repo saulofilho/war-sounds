@@ -12,9 +12,12 @@ O usuário pode assumir a posição de vigia em diferentes trincheiras históric
 
 ---
 
-## 🔊 Acervo Sonoro & Síntese Procedural (Web Audio API)
+## 🔊 Acervo Sonoro & Síntese Procedural (Web Audio API & Áudio Posicional 3D)
 
-O motor acústico calcula o atraso sonoro, filtros passa-baixas com base na distância (50 m, 300 m ou 3 km) e distribuição estéreo no setor da trincheira:
+O motor acústico (`soundEngine.ts`) implementa:
+- **Áudio Posicional 3D com `PannerNode` & `AudioListener`**: modelo espacial binaural HRTF com simulação física de coordenadas Cartesianas `(X, Y, Z)` da trincheira, coning direcional de emissão sonora, atenuação por distância `inverse` e trajetórias dinâmicas animadas (sobrevoo de Spitfire, mergulho vertical do Stuka, varredura de bombardeiros B-17 e projéteis supersônicos raspando o parapeito a centímetros do ouvido).
+- **Convolução de Resposta ao Impulso (Impulse Response)**: simulação das reflexões acústicas em madeira, lama, sacos de areia e casamatas de concreto (RT60: 2,4s em terra úmida).
+- **Filtros Passa-Baixas e Atenuação Atmosférica**: cálculo dinâmico para distâncias de 14 m, 70 m e 280 m.
 
 - **Armas de Infantaria**:
   - `M1 Garand`: Semiautomático calibre .30-06 com a emblemática ejeção acústica metálica (*ping* do clipe em bloco em ~2400 Hz).

@@ -26,7 +26,7 @@ export interface SoundItem {
   acousticCuriosity: string;
   historicalContext: string;
   tacticalTrenchRole: string;
-  soundAction: 'm1garand' | 'mg42' | 'kar98k' | 'thompson' | 'mortar' | 'stuka' | 'spitfire' | 'b17' | 'tiger1' | 't34' | 'sherman' | 'katyusha' | 'howitzer105' | 'navalBombardment' | 'grenade';
+  soundAction: 'm1garand' | 'mg42' | 'kar98k' | 'thompson' | 'mortar' | 'stuka' | 'spitfire' | 'b17' | 'tiger1' | 't34' | 'sherman' | 'katyusha' | 'howitzer105' | 'navalBombardment' | 'grenade' | 'bulletWhiz';
 }
 
 export interface BattleScenario {
@@ -149,6 +149,24 @@ export const SOUND_ITEMS: SoundItem[] = [
     historicalContext: 'Capaz de realizar disparos com ângulo superior a 45 graus, permitia atingir alvos entrincheirados que a artilharia de tiro tenso não conseguia alcançar.',
     tacticalTrenchRole: 'Disparado de dentro de poços protegidos de trincheira para saturar parapeitos inimigos e posições de metralhadora com granadas de fragmentação.',
     soundAction: 'mortar',
+  },
+  {
+    id: 'sniper-whiz',
+    name: 'Tiro Rasante & Projétil Supersônico (3D)',
+    subtitle: 'Projétil 7.92mm Mauser cruzando a centímetros do capacete',
+    category: 'weapons',
+    faction: 'Eixo (Alemanha)',
+    year: '1939 - 1945',
+    specs: {
+      caliberOrEngine: '7,92×57 mm Mauser Spitzgeschoss',
+      rateOrSpeed: 'Velocidade de boca: 760 a 860 m/s (Mach 2,5)',
+      range: 'Tiro de precisão até 800 m',
+      weightOrCrew: 'Projétil de 12,8 g',
+    },
+    acousticCuriosity: 'Fenômeno acústico puro em 3D: o estalo supersônico agudo (Mach cone snap) atinge o ouvido antes do estampido da arma, seguido pelo zunido cortante do ar e pelo impacto violento nos troncos do parados.',
+    historicalContext: 'Snipers em Stalingrado e na Normandia mantinham soldados imobilizados sob o nível do parapeito. Erguer a cabeça por 2 segundos era frequentemente fatal.',
+    tacticalTrenchRole: 'Interdição psicológica e vigilância letal de frestas de tiro e periscópios nas linhas de trincheira.',
+    soundAction: 'bulletWhiz',
   },
 
   // AVIÕES

@@ -9,8 +9,10 @@ import {
   Headphones,
   Zap,
   Volume2,
+  Waves,
 } from 'lucide-react';
 import { SOUND_ITEMS, SoundItem } from '../data/ww2HistoricalData';
+import { AcousticEnvironment } from '../services/audioEngine';
 
 interface SoundTriggerGridProps {
   category: 'all' | 'weapons' | 'planes' | 'tanks' | 'artillery';
@@ -26,6 +28,10 @@ interface SoundTriggerGridProps {
   onToggleBinaural: () => void;
   firingMode: 'burst' | 'single';
   onFiringModeChange: (mode: 'burst' | 'single') => void;
+  acousticPreset: AcousticEnvironment;
+  onAcousticPresetChange: (preset: AcousticEnvironment) => void;
+  reverbMix: number;
+  onReverbMixChange: (val: number) => void;
 }
 
 export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
@@ -42,6 +48,10 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
   onToggleBinaural,
   firingMode,
   onFiringModeChange,
+  acousticPreset,
+  onAcousticPresetChange,
+  reverbMix,
+  onReverbMixChange,
 }) => {
   const filteredItems = SOUND_ITEMS.filter((item) => {
     if (category === 'all') return true;
@@ -125,6 +135,67 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
 
         {/* Spatial Acoustic Settings & Firing Mode */}
         <div className="flex flex-wrap items-center gap-4 text-xs text-stone-300">
+          {/* Impulse Response Reverb Environment Preset */}
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400 font-medium flex items-center gap-1">
+              <Waves className="h-3.5 w-3.5" />
+              Reverberação:
+            </span>
+            <div className="flex items-center p-0.5 bg-stone-900 border border-stone-800 rounded">
+              <button
+                onClick={() => onAcousticPresetChange('trenchMud')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  acousticPreset === 'trenchMud'
+                    ? 'bg-amber-600 text-stone-100 font-semibold shadow-sm'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+                title="Trincheira de terra úmida, tábuas de madeira e sacos de areia (RT60: 2.4s)"
+              >
+                Trincheira Real
+              </button>
+              <button
+                onClick={() => onAcousticPresetChange('bunkerConcrete')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  acousticPreset === 'bunkerConcrete'
+                    ? 'bg-amber-600 text-stone-100 font-semibold shadow-sm'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+                title="Bunker de concreto armado fechado com forte confinamento metálico"
+              >
+                Bunker
+              </button>
+              <button
+                onClick={() => onAcousticPresetChange('openCraterField')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  acousticPreset === 'openCraterField'
+                    ? 'bg-amber-600 text-stone-100 font-semibold shadow-sm'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+                title="Terra de Ninguém / Campo aberto com eco profundo rolando no horizonte"
+              >
+                Campo Aberto
+              </button>
+            </div>
+          </div>
+
+          {/* Reverb Intensity / Wet mix */}
+          <div className="flex items-center gap-2">
+            <span className="text-stone-400">Profundidade:</span>
+            <input
+              type="range"
+              min="0.1"
+              max="0.8"
+              step="0.05"
+              value={reverbMix}
+              onChange={(e) => onReverbMixChange(parseFloat(e.target.value))}
+              className="w-16 h-1.5 bg-stone-800 accent-amber-500 rounded cursor-pointer"
+              title="Ajuste do ganho da reverberação por convolução da trincheira"
+            />
+            <span className="font-mono text-[11px] text-stone-400">
+              {Math.round(reverbMix * 100)}%
+            </span>
+          </div>
+
           {/* Firing Mode Selector */}
           <div className="flex items-center gap-2">
             <span className="text-stone-400">Cadência:</span>
@@ -138,7 +209,7 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
                 }`}
                 title="Rajada completa com todas as munições"
               >
-                Rajada Completa
+                Rajada
               </button>
               <button
                 onClick={() => onFiringModeChange('single')}
@@ -149,7 +220,7 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
                 }`}
                 title="Tiro único ou rajada curta controlada"
               >
-                Tiro Controlado (1x)
+                Tiro (1x)
               </button>
             </div>
           </div>
@@ -202,27 +273,63 @@ export const SoundTriggerGrid: React.FC<SoundTriggerGridProps> = ({
                 ? 'bg-emerald-950/70 border-emerald-700/60 text-emerald-300 font-semibold'
                 : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
             }`}
-            title="Ativar modelo espacial HRTF para fones de ouvido"
+            title="Ativar modelo espacial 3D HRTF (Head-Related Transfer Function) para fones de ouvido"
           >
             <Headphones className="h-3.5 w-3.5" />
-            <span>Áudio 3D HRTF</span>
+            <span>3D HRTF {isBinaural ? 'Ativo' : 'Desativado'}</span>
           </button>
 
-          {/* Pan Slider */}
-          <div className="flex items-center gap-2">
-            <span className="text-stone-400">Setor:</span>
-            <span className="text-[11px] text-stone-500">Esq</span>
+          {/* 3D Trench Sector Presets & Pan */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-stone-400">Direção 3D:</span>
+            <div className="flex items-center p-0.5 bg-stone-900 border border-stone-800 rounded">
+              <button
+                onClick={() => onPanChange(-0.8)}
+                className={`px-2 py-1 rounded text-[11px] transition-colors ${
+                  pan <= -0.5
+                    ? 'bg-stone-700 text-amber-400 font-semibold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+                title="Flanco Esquerdo da Trincheira (-75°)"
+              >
+                Flanco Esq
+              </button>
+              <button
+                onClick={() => onPanChange(0)}
+                className={`px-2 py-1 rounded text-[11px] transition-colors ${
+                  Math.abs(pan) < 0.3
+                    ? 'bg-stone-700 text-amber-400 font-semibold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+                title="Frente / Linhas Inimigas em Terra de Ninguém (0°)"
+              >
+                Frente (0°)
+              </button>
+              <button
+                onClick={() => onPanChange(0.8)}
+                className={`px-2 py-1 rounded text-[11px] transition-colors ${
+                  pan >= 0.5
+                    ? 'bg-stone-700 text-amber-400 font-semibold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+                title="Flanco Direito da Trincheira (+75°)"
+              >
+                Flanco Dir
+              </button>
+            </div>
             <input
               type="range"
               min="-1"
               max="1"
-              step="0.2"
+              step="0.1"
               value={pan}
               onChange={(e) => onPanChange(parseFloat(e.target.value))}
-              className="w-16 h-1.5 bg-stone-800 accent-amber-500 rounded cursor-pointer"
-              title="Posicionamento estéreo no setor da trincheira"
+              className="w-14 h-1.5 bg-stone-800 accent-amber-500 rounded cursor-pointer ml-1"
+              title="Ajuste fino do azimute 3D do PannerNode (-90° a +90°)"
             />
-            <span className="text-[11px] text-stone-500">Dir</span>
+            <span className="font-mono text-[11px] text-stone-400 w-8 text-right">
+              {pan > 0 ? `+${Math.round(pan * 90)}°` : `${Math.round(pan * 90)}°`}
+            </span>
           </div>
         </div>
       </div>
