@@ -316,6 +316,43 @@ export class WWIISoundEngine {
   }
 
   /**
+   * Generates a Pink noise buffer for wind, respiration, and mechanical friction
+   */
+  private createPinkNoiseBuffer(durationSec: number = 1.0): AudioBuffer {
+    if (!this.ctx) throw new Error('AudioContext missing');
+    const length = Math.floor(this.ctx.sampleRate * durationSec);
+    const buffer = this.ctx.createBuffer(1, length, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i = 0; i < length; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.96900 * b2 + white * 0.1538520;
+      b3 = 0.86650 * b3 + white * 0.3104856;
+      b4 = 0.55000 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.0168980;
+      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+      b6 = white * 0.115926;
+    }
+    return buffer;
+  }
+
+  /**
+   * Alias for Ju 87 dive bomber
+   */
+  public playStuka(distance: 'near' | 'mid' | 'far' = 'near', pan: number | TrenchDirection = 0) {
+    this.playStukaDive(distance, pan);
+  }
+
+  /**
+   * Alias for 105mm artillery blast
+   */
+  public playHowitzer105(distance: 'near' | 'mid' | 'far' = 'near', pan: number | TrenchDirection = 0) {
+    this.playArtilleryBlast(distance, pan);
+  }
+
+  /**
    * Helper to set PannerNode position across modern AudioParam and legacy Web Audio
    */
   public setPannerPos(panner: PannerNode, x: number, y: number, z: number, time?: number) {
@@ -1563,6 +1600,235 @@ export class WWIISoundEngine {
     setTimeout(() => {
       this.playArtilleryBlast(distance, pan);
     }, 950);
+  }
+
+  // -------------------------------------------------------------
+  // ESTÍMULOS SENSORIAIS EM 1ª PESSOA (FIRST-PERSON SOLDIER SENSORY AUDIO)
+  // -------------------------------------------------------------
+
+  /**
+   * Soldier's racing heartbeat (lub-dub) felt inside chest
+   */
+  public playHeartbeat() {
+    if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    const playLub = (t: number, vol: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(62, t);
+      osc.frequency.exponentialRampToValueAtTime(32, t + 0.12);
+      gain.gain.setValueAtTime(vol, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+      osc.connect(gain);
+      gain.connect(this.masterGain!);
+      osc.start(t);
+      osc.stop(t + 0.14);
+    };
+
+    // Lub
+    playLub(now, 0.42);
+    // Dub (slightly lower amplitude, 120ms later)
+    playLub(now + 0.13, 0.28);
+  }
+
+  /**
+   * Exhausted / frightened soldier breathing
+   */
+  public playHeavyBreathing(isInhale: boolean = true) {
+    if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    const dur = isInhale ? 0.9 : 1.2;
+    const buf = this.createPinkNoiseBuffer(dur);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.setValueAtTime(2.2, now);
+
+    const gain = ctx.createGain();
+
+    if (isInhale) {
+      filter.frequency.setValueAtTime(320, now);
+      filter.frequency.exponentialRampToValueAtTime(780, now + dur);
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.22, now + dur * 0.7);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    } else {
+      filter.frequency.setValueAtTime(720, now);
+      filter.frequency.exponentialRampToValueAtTime(260, now + dur);
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    }
+
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    src.start(now);
+    src.stop(now + dur + 0.05);
+  }
+
+  /**
+   * Muddy combat boots sloshing along wooden trench duckboards
+   */
+  public playMudSteps() {
+    if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    // Wet mud squelch
+    const mudBuf = this.createBrownNoiseBuffer(0.25);
+    const mud = ctx.createBufferSource();
+    mud.buffer = mudBuf;
+    const mudFilter = ctx.createBiquadFilter();
+    mudFilter.type = 'lowpass';
+    mudFilter.frequency.setValueAtTime(800, now);
+    mudFilter.frequency.exponentialRampToValueAtTime(220, now + 0.22);
+
+    const mudGain = ctx.createGain();
+    mudGain.gain.setValueAtTime(0.35, now);
+    mudGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+    mud.connect(mudFilter);
+    mudFilter.connect(mudGain);
+    mudGain.connect(this.masterGain);
+    mud.start(now);
+    mud.stop(now + 0.25);
+
+    // Duckboard plank creak
+    const wood = ctx.createOscillator();
+    const woodGain = ctx.createGain();
+    wood.type = 'triangle';
+    wood.frequency.setValueAtTime(140 + Math.random() * 40, now);
+    wood.frequency.exponentialRampToValueAtTime(85, now + 0.18);
+    woodGain.gain.setValueAtTime(0.12, now);
+    woodGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    wood.connect(woodGain);
+    woodGain.connect(this.masterGain);
+    wood.start(now);
+    wood.stop(now + 0.2);
+  }
+
+  /**
+   * Shell shock tinnitus: piercing ringing + temporary deafness
+   */
+  public playTinnitus(durationSeconds: number = 4.5) {
+    if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    // Dual ringing oscillators for realistic psychoacoustic ringing
+    const ring1 = ctx.createOscillator();
+    const ring2 = ctx.createOscillator();
+    const ringGain = ctx.createGain();
+
+    ring1.type = 'sine';
+    ring1.frequency.setValueAtTime(3950, now);
+
+    ring2.type = 'sine';
+    ring2.frequency.setValueAtTime(3954, now); // 4Hz beat frequency
+
+    ringGain.gain.setValueAtTime(0.32, now);
+    ringGain.gain.setValueAtTime(0.32, now + durationSeconds * 0.4);
+    ringGain.gain.exponentialRampToValueAtTime(0.001, now + durationSeconds);
+
+    ring1.connect(ringGain);
+    ring2.connect(ringGain);
+    ringGain.connect(this.masterGain);
+
+    ring1.start(now);
+    ring2.start(now);
+    ring1.stop(now + durationSeconds + 0.1);
+    ring2.stop(now + durationSeconds + 0.1);
+  }
+
+  /**
+   * Parachute illumination flare launch into the night sky
+   */
+  public playFlareLaunch() {
+    if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    // Pneumatic mortar thump
+    const pop = ctx.createOscillator();
+    const popGain = ctx.createGain();
+    pop.type = 'sine';
+    pop.frequency.setValueAtTime(140, now);
+    pop.frequency.exponentialRampToValueAtTime(35, now + 0.12);
+    popGain.gain.setValueAtTime(0.6, now);
+    popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+    pop.connect(popGain);
+    popGain.connect(this.masterGain);
+    pop.start(now);
+    pop.stop(now + 0.15);
+
+    // Ascending rocket whistle
+    const hiss = ctx.createBufferSource();
+    hiss.buffer = this.createPinkNoiseBuffer(1.4);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(800, now + 0.05);
+    filter.frequency.exponentialRampToValueAtTime(2400, now + 1.2);
+    const hissGain = ctx.createGain();
+    hissGain.gain.setValueAtTime(0.01, now + 0.05);
+    hissGain.gain.linearRampToValueAtTime(0.35, now + 0.8);
+    hissGain.gain.exponentialRampToValueAtTime(0.01, now + 1.4);
+
+    hiss.connect(filter);
+    filter.connect(hissGain);
+    hissGain.connect(this.masterGain);
+    hiss.start(now + 0.05);
+    hiss.stop(now + 1.45);
+
+    // Ignition pop in the sky at 1.4s
+    setTimeout(() => {
+      if (!this.ctx || !this.masterGain) return;
+      const t = this.ctx.currentTime;
+      const burst = this.ctx.createOscillator();
+      const bGain = this.ctx.createGain();
+      burst.type = 'triangle';
+      burst.frequency.setValueAtTime(450, t);
+      burst.frequency.exponentialRampToValueAtTime(120, t + 0.2);
+      bGain.gain.setValueAtTime(0.4, t);
+      bGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      burst.connect(bGain);
+      bGain.connect(this.masterGain);
+      burst.start(t);
+      burst.stop(t + 0.26);
+    }, 1400);
+  }
+
+  /**
+   * Dirt, soil & debris raining down onto soldier's steel M1 helmet
+   */
+  public playDirtFallingOnHelmet() {
+    if (!this.ensureRunning() || !this.ctx || !this.masterGain) return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+
+    const totalPellets = 16;
+    for (let i = 0; i < totalPellets; i++) {
+      const delay = Math.random() * 1.5;
+      const t = now + delay;
+      // Metallic tink on helmet
+      const tink = ctx.createOscillator();
+      const tinkGain = ctx.createGain();
+      tink.type = 'triangle';
+      tink.frequency.setValueAtTime(1800 + Math.random() * 2200, t);
+      tinkGain.gain.setValueAtTime(0.08 + Math.random() * 0.1, t);
+      tinkGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      tink.connect(tinkGain);
+      tinkGain.connect(this.masterGain);
+      tink.start(t);
+      tink.stop(t + 0.05);
+    }
   }
 
   // -------------------------------------------------------------

@@ -7,12 +7,13 @@ import { TrenchLifeView } from './components/TrenchLifeView';
 import { AcousticQuizView } from './components/AcousticQuizView';
 import { ItemDetailModal } from './components/ItemDetailModal';
 import { CoordinatedBarrageModal } from './components/CoordinatedBarrageModal';
+import { SoldierTrenchExperience } from './components/SoldierTrenchExperience';
 import { SoundItem } from './data/ww2HistoricalData';
 import { soundEngine } from './services/audioEngine';
 import { Volume2, Shield } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'simulator' | 'scenarios' | 'arsenal' | 'trench-life' | 'quiz'>('simulator');
+  const [activeTab, setActiveTab] = useState<'simulator' | 'soldier' | 'scenarios' | 'arsenal' | 'trench-life' | 'quiz'>('soldier');
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.85);
   const [selectedItemForModal, setSelectedItemForModal] = useState<SoundItem | null>(null);
@@ -71,6 +72,8 @@ export default function App() {
 
       {/* Main View Area */}
       <main className="flex-1 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {activeTab === 'soldier' && <SoldierTrenchExperience />}
+
         {activeTab === 'simulator' && (
           <TrenchSimulator
             onOpenDetails={(item) => setSelectedItemForModal(item)}

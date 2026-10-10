@@ -4,8 +4,8 @@ import { soundEngine } from '../services/audioEngine';
 import { trenchAppIconImg } from '../data/ww2HistoricalData';
 
 interface HeaderProps {
-  activeTab: 'simulator' | 'scenarios' | 'arsenal' | 'trench-life' | 'quiz';
-  onSelectTab: (tab: 'simulator' | 'scenarios' | 'arsenal' | 'trench-life' | 'quiz') => void;
+  activeTab: 'simulator' | 'soldier' | 'scenarios' | 'arsenal' | 'trench-life' | 'quiz';
+  onSelectTab: (tab: 'simulator' | 'soldier' | 'scenarios' | 'arsenal' | 'trench-life' | 'quiz') => void;
   isMuted: boolean;
   onToggleMute: () => void;
   volume: number;
@@ -45,6 +45,17 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 2: Navigation Links (Single-line, unboxed text links) */}
         <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+          <button
+            onClick={() => onSelectTab('soldier')}
+            className={`whitespace-nowrap transition-colors py-1 flex items-center gap-1.5 ${
+              activeTab === 'soldier'
+                ? 'text-amber-400 border-b-2 border-amber-500 font-semibold'
+                : 'text-stone-300 hover:text-stone-100'
+            }`}
+          >
+            <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            Soldado na Trincheira (1ª Pessoa)
+          </button>
           <button
             onClick={() => onSelectTab('simulator')}
             className={`whitespace-nowrap transition-colors py-1 ${
@@ -143,6 +154,15 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Mobile subnavigation bar */}
       <div className="flex md:hidden overflow-x-auto border-t border-stone-800 px-4 py-2 gap-4 text-xs font-medium scrollbar-none">
+        <button
+          onClick={() => onSelectTab('soldier')}
+          className={`whitespace-nowrap shrink-0 flex items-center gap-1 ${
+            activeTab === 'soldier' ? 'text-amber-400 font-semibold' : 'text-stone-300'
+          }`}
+        >
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+          Soldado (1ª Pessoa)
+        </button>
         <button
           onClick={() => onSelectTab('simulator')}
           className={`whitespace-nowrap shrink-0 ${
