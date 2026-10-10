@@ -4,11 +4,79 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trincheira 1944: Experiência Sonora & Museu Didático</title>
-    <meta name="description" content="Simulador imersivo de trincheira da 2ª Guerra Mundial com síntese sonora realista de armas, aviões, tanques e artilharia, e acervo histórico didático." />
-    <meta property="og:title" content="Trincheira 1944: Experiência Sonora & Museu Didático" />
-    <meta property="og:description" content="Simulador imersivo de trincheira da 2ª Guerra Mundial com síntese sonora realista de armas, aviões, tanques e artilharia, e acervo histórico didático." />
+    <meta
+      name="description"
+      content="Simulador imersivo de trincheira da 2ª Guerra Mundial com síntese sonora realista de armas, aviões, tanques e artilharia, e acervo histórico didático."
+    />
+
+    <!-- Favicon & App Icons -->
+    <link rel="icon" type="image/png" href="./icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="shortcut icon" href="./favicon.png" />
+
+    <!-- OpenGraph / Facebook / WhatsApp / Discord / LinkedIn -->
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Trincheira 1944" />
+    <meta property="og:title" content="Trincheira 1944: Experiência Sonora & Museu Didático" />
+    <meta
+      property="og:description"
+      content="Simulador imersivo de trincheira da 2ª Guerra Mundial com síntese sonora realista de armas, aviões, tanques e artilharia, e acervo histórico didático."
+    />
+    <meta property="og:image" content="./og-image.jpg" />
+    <meta property="og:image:secure_url" content="./og-image.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="720" />
+    <meta property="og:image:alt" content="Trincheira 1944 - Simulador Sonoro e Museu Histórico da Segunda Guerra Mundial" />
+    <meta property="og:locale" content="pt_BR" />
+
+    <!-- Twitter / X Cards -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Trincheira 1944: Experiência Sonora & Museu Didático" />
+    <meta
+      name="twitter:description"
+      content="Simulador imersivo de trincheira da 2ª Guerra Mundial com síntese sonora realista de armas, aviões, tanques e artilharia, e acervo histórico didático."
+    />
+    <meta name="twitter:image" content="./og-image.jpg" />
+    <meta name="twitter:image:alt" content="Trincheira 1944 - Simulador Sonoro e Museu Histórico da Segunda Guerra Mundial" />
+
+    <!-- Schema.org Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Trincheira 1944: Experiência Sonora & Museu Didático",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "All",
+        "description": "Simulador imersivo de trincheira da 2ª Guerra Mundial com síntese sonora realista de armas, aviões, tanques e artilharia, e acervo histórico didático.",
+        "image": "./og-image.jpg",
+        "inLanguage": "pt-BR"
+      }
+    </script>
+
+    <!-- Dynamic absolute URL resolution for social platforms -->
+    <script>
+      (function() {
+        try {
+          var origin = window.location.origin;
+          var path = window.location.pathname.replace(/\/[^/]*$/, '/');
+          var fullImgUrl = new URL('og-image.jpg', origin + path).href;
+          
+          var ogImg = document.querySelector('meta[property="og:image"]');
+          if (ogImg) ogImg.setAttribute('content', fullImgUrl);
+          
+          var ogImgSec = document.querySelector('meta[property="og:image:secure_url"]');
+          if (ogImgSec) ogImgSec.setAttribute('content', fullImgUrl);
+          
+          var twImg = document.querySelector('meta[name="twitter:image"]');
+          if (twImg) twImg.setAttribute('content', fullImgUrl);
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,4 +86,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

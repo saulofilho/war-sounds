@@ -7,8 +7,17 @@ import trenchPanoramicImg from '../assets/images/ww2_trench_dugout_panoramic_179
 import stalingradImg from '../assets/images/ww2_stalingrad_rubble_trench_1791568870090.jpg';
 import normandyImg from '../assets/images/ww2_normandy_bocage_trench_1791568879395.jpg';
 import monteCasteloImg from '../assets/images/ww2_feb_monte_castelo_italy_1791568888567.jpg';
+import trenchAppThumbImg from '../assets/images/trench_app_thumb_1791633634625.jpg';
+import trenchAppIconImg from '../assets/images/trench_app_icon_1791633643665.jpg';
 
-export { trenchPanoramicImg, stalingradImg, normandyImg, monteCasteloImg };
+export {
+  trenchPanoramicImg,
+  stalingradImg,
+  normandyImg,
+  monteCasteloImg,
+  trenchAppThumbImg,
+  trenchAppIconImg,
+};
 
 export interface SoundItem {
   id: string;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Volume2, VolumeX, Radio } from 'lucide-react';
 import { soundEngine } from '../services/audioEngine';
+import { trenchAppIconImg } from '../data/ww2HistoricalData';
 
 interface HeaderProps {
   activeTab: 'simulator' | 'scenarios' | 'arsenal' | 'trench-life' | 'quiz';
@@ -27,8 +28,13 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onSelectTab('simulator')}
           className="flex items-center gap-2.5 text-left text-stone-100 transition-opacity hover:opacity-90 whitespace-nowrap shrink-0"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded bg-stone-900 border border-stone-700 text-amber-500">
-            <Radio className="h-4 w-4" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-stone-900 border border-stone-700/80 overflow-hidden shadow-sm">
+            <img
+              src={trenchAppIconImg}
+              alt="Trincheira 1944"
+              className="h-full w-full object-cover"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div>
             <span className="font-display text-lg font-bold tracking-wider text-amber-400">
