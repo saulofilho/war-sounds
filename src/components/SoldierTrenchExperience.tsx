@@ -25,6 +25,9 @@ import {
   Plane,
   ChevronDown,
   ChevronUp,
+  Vibrate,
+  VibrateOff,
+  CloudFog,
 } from 'lucide-react';
 
 type TrenchEnvironment = 'parapet-day' | 'night-flare' | 'dugout';
@@ -45,6 +48,10 @@ export const SoldierTrenchExperience: React.FC = () => {
   const [hasTinnitus, setHasTinnitus] = useState(false);
   const [dirtSplatter, setDirtSplatter] = useState(false);
   const [lastActionFeedback, setLastActionFeedback] = useState<string | null>(null);
+
+  // Efeito Visual de Neblina Atmosférica (CSS radial-gradient & opacidade)
+  const [atmosphericFog, setAtmosphericFog] = useState(true);
+  const [fogDensity, setFogDensity] = useState<'normal' | 'dense'>('normal');
 
   // Ambient sound layers
   const [ambientRain, setAmbientRain] = useState(true);
@@ -115,9 +122,37 @@ export const SoldierTrenchExperience: React.FC = () => {
     };
   }, [isTense]);
 
-  // Handle screen shake trigger
+  // Haptic feedback (Vibration API) for mobile devices
+  const [hapticsEnabled, setHapticsEnabled] = useState(true);
+
+  // Trigger tactile vibration feedback for concussive shakes on mobile
+  const triggerHaptic = useCallback((intensity: 'light' | 'heavy' | 'violent') => {
+    if (!hapticsEnabled) return;
+    if (typeof window !== 'undefined' && 'navigator' in window && typeof navigator.vibrate === 'function') {
+      try {
+        if (intensity === 'violent') {
+          // Concussive multi-stage shockwave rumble: near artillery/mortar/Stuka direct impact
+          navigator.vibrate([240, 80, 180, 60, 320]);
+        } else if (intensity === 'heavy') {
+          // Heavy explosive tremor
+          navigator.vibrate([180, 60, 140]);
+        } else if (intensity === 'light') {
+          // Subtle recoil twitch
+          navigator.vibrate(30);
+        }
+      } catch {
+        // Gracefully ignore if blocked by device settings or unsupported
+      }
+    }
+  }, [hapticsEnabled]);
+
+  // Handle screen shake trigger with tactile mobile vibration
   const triggerShake = (intensity: 'light' | 'heavy' | 'violent', durationMs: number = 700) => {
     setScreenShake(intensity);
+    // Dispara feedback tátil para tremores pesados e violentos
+    if (intensity === 'heavy' || intensity === 'violent') {
+      triggerHaptic(intensity);
+    }
     setTimeout(() => {
       setScreenShake('none');
     }, durationMs);
@@ -289,6 +324,21 @@ export const SoldierTrenchExperience: React.FC = () => {
     });
   }, [flashFeedback]);
 
+  // 11. Alternar neblina atmosférica (normal -> densa -> desativada)
+  const toggleAtmosphericFog = useCallback(() => {
+    if (!atmosphericFog) {
+      setAtmosphericFog(true);
+      setFogDensity('normal');
+      flashFeedback('🌫️ NEBLINA ATMOSFÉRICA ATIVADA');
+    } else if (fogDensity === 'normal') {
+      setFogDensity('dense');
+      flashFeedback('🌫️ NEBLINA DENSA DA TRINCHEIRA');
+    } else {
+      setAtmosphericFog(false);
+      flashFeedback('🌫️ NEBLINA DESATIVADA');
+    }
+  }, [atmosphericFog, fogDensity, flashFeedback]);
+
   // Keyboard controls for tactile immersion
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -334,6 +384,10 @@ export const SoldierTrenchExperience: React.FC = () => {
           e.preventDefault();
           handleArtillerySalvo();
           break;
+        case 'KeyN':
+          e.preventDefault();
+          toggleAtmosphericFog();
+          break;
         default:
           break;
       }
@@ -351,6 +405,7 @@ export const SoldierTrenchExperience: React.FC = () => {
     handleStukaDive,
     handleMudSteps,
     handleArtillerySalvo,
+    toggleAtmosphericFog,
   ]);
 
   // Toggle true browser fullscreen
@@ -439,6 +494,39 @@ export const SoldierTrenchExperience: React.FC = () => {
         {/* Rain & Mist Cinematic Overlay */}
         {ambientRain && (
           <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(255,255,255,0.06),_transparent_70%)] opacity-80" />
+        )}
+
+        {/* =========================================================================
+            EFEITO VISUAL: NEBLINA ATMOSFÉRICA (OVERLAY COM GRADIENTE RADIAL E OPACIDADE)
+            ========================================================================= */}
+        {atmosphericFog && (
+          <div
+            className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-1000 ${
+              fogDensity === 'dense' ? 'opacity-90' : 'opacity-75'
+            }`}
+          >
+            {/* Camada Primária: Neblina volumétrica com gradiente radial adaptado ao ambiente */}
+            <div
+              className="absolute inset-0 atmospheric-trench-fog"
+              style={{
+                background:
+                  environment === 'night-flare'
+                    ? 'radial-gradient(ellipse 95% 70% at 50% 45%, rgba(220, 230, 245, 0.34) 0%, rgba(155, 170, 185, 0.22) 48%, rgba(60, 70, 80, 0.10) 80%, transparent 100%)'
+                    : environment === 'dugout'
+                    ? 'radial-gradient(ellipse 85% 65% at 50% 60%, rgba(175, 155, 135, 0.28) 0%, rgba(110, 95, 80, 0.18) 52%, rgba(50, 42, 35, 0.10) 82%, transparent 100%)'
+                    : 'radial-gradient(ellipse 95% 70% at 50% 65%, rgba(200, 215, 225, 0.38) 0%, rgba(145, 160, 172, 0.25) 46%, rgba(75, 85, 95, 0.12) 78%, transparent 100%)',
+              }}
+            />
+
+            {/* Camada Secundária: Bruma rastejante de solo sobre os sacos de areia e No Man's Land */}
+            <div
+              className="absolute inset-0 atmospheric-fog-layer-2 mix-blend-screen"
+              style={{
+                background:
+                  'radial-gradient(ellipse 110% 45% at 50% 80%, rgba(190, 205, 215, 0.28) 0%, rgba(130, 145, 155, 0.16) 55%, transparent 88%)',
+              }}
+            />
+          </div>
         )}
 
         {/* Dynamic Flash / Explosion Lightning */}
@@ -633,6 +721,51 @@ export const SoldierTrenchExperience: React.FC = () => {
               <Radio className="w-4 h-4" />
             </button>
 
+            {/* Haptic Vibration Toggle for Mobile Devices */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const next = !hapticsEnabled;
+                setHapticsEnabled(next);
+                if (next && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+                  try {
+                    navigator.vibrate([100, 50, 100]);
+                  } catch {}
+                }
+                flashFeedback(next ? '📳 VIBRAÇÃO ATIVADA' : '📴 VIBRAÇÃO DESATIVADA');
+              }}
+              title={hapticsEnabled ? 'Feedback Tátil Ativo (Vibração em Tremores Pesados)' : 'Feedback Tátil Desativado'}
+              className={`p-2 rounded-full border backdrop-blur-md transition-colors ${
+                hapticsEnabled
+                  ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
+                  : 'bg-stone-950/60 border-stone-800 text-stone-500'
+              }`}
+            >
+              {hapticsEnabled ? <Vibrate className="w-4 h-4" /> : <VibrateOff className="w-4 h-4" />}
+            </button>
+
+            {/* Atmospheric Fog Toggle */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleAtmosphericFog();
+              }}
+              title={
+                atmosphericFog
+                  ? `Neblina Atmosférica: ${fogDensity === 'dense' ? 'Densa' : 'Normal'} (Clique para alternar)`
+                  : 'Neblina Atmosférica Desativada'
+              }
+              className={`p-2 rounded-full border backdrop-blur-md transition-colors ${
+                atmosphericFog
+                  ? fogDensity === 'dense'
+                    ? 'bg-slate-800/90 border-slate-400 text-slate-100 shadow-[0_0_12px_rgba(203,213,225,0.35)]'
+                    : 'bg-slate-900/80 border-slate-500 text-slate-300'
+                  : 'bg-stone-950/60 border-stone-800 text-stone-500'
+              }`}
+            >
+              <CloudFog className="w-4 h-4" />
+            </button>
+
             {/* Fullscreen Button */}
             <button
               onClick={(e) => {
@@ -654,6 +787,7 @@ export const SoldierTrenchExperience: React.FC = () => {
           <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">F</kbd> Projétil Rasante 3D</div>
           <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">M</kbd> Alerta Morteiro</div>
           <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">C</kbd> Agachar / Abrigo</div>
+          <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">N</kbd> Neblina Atmosférica</div>
         </div>
 
         {/* =========================================================================

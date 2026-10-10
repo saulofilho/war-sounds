@@ -269,6 +269,11 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
     // Screen effects
     if (item.category === 'artillery' || item.category === 'tanks') {
       setIsShaking(true);
+      if (typeof window !== 'undefined' && 'navigator' in window && typeof navigator.vibrate === 'function') {
+        try {
+          navigator.vibrate([180, 60, 140]);
+        } catch {}
+      }
       setTimeout(() => setIsShaking(false), 500);
     }
     if (item.category === 'weapons') {
@@ -343,6 +348,24 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
             className="h-full w-full object-cover transition-opacity duration-700"
             referrerPolicy="no-referrer"
           />
+
+          {/* Efeito Visual de Neblina Atmosférica da Trincheira (Radial Gradient & Opacity) */}
+          <div
+            className="pointer-events-none absolute inset-0 z-[1] transition-opacity duration-700 atmospheric-trench-fog"
+            style={{
+              background:
+                'radial-gradient(ellipse 95% 65% at 50% 65%, rgba(200, 215, 225, 0.30) 0%, rgba(145, 160, 172, 0.18) 45%, rgba(75, 85, 95, 0.08) 78%, transparent 100%)',
+              opacity: 0.82,
+            }}
+          >
+            <div
+              className="absolute inset-0 atmospheric-fog-layer-2 mix-blend-screen"
+              style={{
+                background:
+                  'radial-gradient(ellipse 110% 45% at 50% 80%, rgba(190, 205, 215, 0.24) 0%, rgba(130, 145, 155, 0.12) 55%, transparent 88%)',
+              }}
+            />
+          </div>
 
           <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/40 to-black/30" />
 
@@ -436,6 +459,8 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
                 <span>Periscópio Óptico de Trincheira</span>
                 <span aria-hidden="true">·</span>
                 <span>Visada de 180°</span>
+                <span aria-hidden="true">·</span>
+                <span>Neblina Atmosférica: Ativa</span>
                 <span aria-hidden="true">·</span>
                 <span>Eco de Solo: Ativo</span>
               </div>
