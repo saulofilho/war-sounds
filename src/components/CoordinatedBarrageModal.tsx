@@ -116,8 +116,8 @@ export const CoordinatedBarrageModal: React.FC<CoordinatedBarrageModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/85 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-2xl rounded-xl border border-stone-700 bg-stone-900 p-6 shadow-2xl text-stone-100 space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/85 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-stone-700 bg-stone-900 p-4 sm:p-6 shadow-2xl text-stone-100 space-y-4 sm:space-y-6">
         {/* Close Button */}
         <button
           onClick={onClose}

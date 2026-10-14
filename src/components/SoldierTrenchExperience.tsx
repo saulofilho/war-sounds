@@ -28,13 +28,19 @@ import {
   Vibrate,
   VibrateOff,
   CloudFog,
+  Layers,
 } from 'lucide-react';
+import { TrenchDebrisCanvas, TrenchDebrisCanvasRef } from './TrenchDebrisCanvas';
 
 type TrenchEnvironment = 'parapet-day' | 'night-flare' | 'dugout';
 
 export const SoldierTrenchExperience: React.FC = () => {
   // Current sensory environment
   const [environment, setEnvironment] = useState<TrenchEnvironment>('parapet-day');
+
+  // Debris & Dust Canvas reference
+  const debrisCanvasRef = useRef<TrenchDebrisCanvasRef>(null);
+  const [dustParticlesEnabled, setDustParticlesEnabled] = useState(true);
 
   // Sensory states
   const [isCrouched, setIsCrouched] = useState(false);
@@ -58,6 +64,9 @@ export const SoldierTrenchExperience: React.FC = () => {
   const [ambientWind, setAmbientWind] = useState(true);
   const [ambientArtillery, setAmbientArtillery] = useState(true);
   const [ambientRadio, setAmbientRadio] = useState(false);
+
+  // Responsive UI controls visibility
+  const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const heartbeatTimerRef = useRef<number | null>(null);
@@ -146,12 +155,15 @@ export const SoldierTrenchExperience: React.FC = () => {
     }
   }, [hapticsEnabled]);
 
-  // Handle screen shake trigger with tactile mobile vibration
-  const triggerShake = (intensity: 'light' | 'heavy' | 'violent', durationMs: number = 700) => {
+  // Handle screen shake trigger with tactile mobile vibration and dust/debris particle blast
+  const triggerShake = (intensity: 'light' | 'heavy' | 'violent', durationMs: number = 700, xRatio?: number) => {
     setScreenShake(intensity);
-    // Dispara feedback tátil para tremores pesados e violentos
+    // Dispara feedback tátil e partículas de poeira e detritos para tremores pesados e violentos
     if (intensity === 'heavy' || intensity === 'violent') {
       triggerHaptic(intensity);
+      if (dustParticlesEnabled) {
+        debrisCanvasRef.current?.triggerBlast(intensity, { xRatio });
+      }
     }
     setTimeout(() => {
       setScreenShake('none');
@@ -216,18 +228,17 @@ export const SoldierTrenchExperience: React.FC = () => {
     setIsTense(true);
     setBpm(130);
 
+    const mortarPan = Math.random() * 0.8 - 0.4;
     // Whistle and impact in 3D
-    soundEngine.playMortar('near', Math.random() * 0.8 - 0.4);
+    soundEngine.playMortar('near', mortarPan);
 
-    // Detonation impact at 2.4s
+    // Detonation impact at 2.35s (exact sync with flight whistle descent)
     setTimeout(() => {
+      const xRatio = 0.5 + mortarPan * 0.55;
       triggerFlash('artillery', 450);
-      triggerShake('violent', 1400);
+      triggerShake('violent', 1400, xRatio);
       setDirtSplatter(true);
       setTimeout(() => setDirtSplatter(false), 3800);
-
-      // Dirt on helmet
-      soundEngine.playDirtFallingOnHelmet();
 
       // Shell shock ringing
       setHasTinnitus(true);
@@ -237,7 +248,7 @@ export const SoldierTrenchExperience: React.FC = () => {
       }, 4200);
 
       flashFeedback('💥 IMPACTO PRÓXIMO! TERRA E ESTILHAÇOS!');
-    }, 2400);
+    }, 2350);
   }, [flashFeedback]);
 
   // 5. Hand grenade thrown over parapet
@@ -248,7 +259,7 @@ export const SoldierTrenchExperience: React.FC = () => {
 
     setTimeout(() => {
       triggerFlash('artillery', 250);
-      triggerShake('heavy', 750);
+      triggerShake('heavy', 750, 0.65);
     }, 950);
   }, [flashFeedback]);
 
@@ -260,33 +271,32 @@ export const SoldierTrenchExperience: React.FC = () => {
     setBpm(140);
     soundEngine.playStuka();
 
-    // Bomb impact at ~4.5s
+    // Bomb impact at peak dive point (2.85s)
     setTimeout(() => {
       triggerFlash('artillery', 500);
-      triggerShake('violent', 1600);
-      soundEngine.playDirtFallingOnHelmet();
+      triggerShake('violent', 1600, 0.5);
       setDirtSplatter(true);
       setTimeout(() => setDirtSplatter(false), 3000);
-    }, 4500);
+    }, 2850);
   }, [flashFeedback]);
 
   // 7. Heavy Artillery barrage barrage
   const handleArtillerySalvo = useCallback(() => {
     soundEngine.ensureRunning();
     flashFeedback('🔥 BARRAGEM DE ARTILHARIA!');
-    triggerShake('heavy', 900);
+    triggerShake('heavy', 900, 0.35);
     triggerFlash('artillery', 300);
 
     soundEngine.playHowitzer105('near', Math.random() * 0.6 - 0.3);
 
     setTimeout(() => {
       soundEngine.playArtilleryBlast('near', 0.2);
-      triggerShake('violent', 1100);
+      triggerShake('violent', 1100, 0.65);
     }, 800);
 
     setTimeout(() => {
       soundEngine.playArtilleryBlast('mid', -0.3);
-      triggerShake('heavy', 800);
+      triggerShake('heavy', 800, 0.3);
     }, 1800);
   }, [flashFeedback]);
 
@@ -295,7 +305,7 @@ export const SoldierTrenchExperience: React.FC = () => {
     soundEngine.ensureRunning();
     flashFeedback('🚀 SALVO DE FOGUETES!');
     soundEngine.playKatyushaSalvo(12, 0);
-    triggerShake('heavy', 1200);
+    triggerShake('heavy', 1200, 0.5);
   }, [flashFeedback]);
 
   // 9. Mud footsteps along duckboards
@@ -388,6 +398,18 @@ export const SoldierTrenchExperience: React.FC = () => {
           e.preventDefault();
           toggleAtmosphericFog();
           break;
+        case 'KeyP':
+          e.preventDefault();
+          setDustParticlesEnabled((prev) => {
+            const next = !prev;
+            if (next) {
+              debrisCanvasRef.current?.triggerBlast('violent', { xRatio: 0.5 });
+              triggerShake('violent', 1000);
+            }
+            flashFeedback(next ? '💨 POEIRA & DETRITOS ATIVADOS' : '💨 POEIRA & DETRITOS DESATIVADOS');
+            return next;
+          });
+          break;
         default:
           break;
       }
@@ -406,6 +428,7 @@ export const SoldierTrenchExperience: React.FC = () => {
     handleMudSteps,
     handleArtillerySalvo,
     toggleAtmosphericFog,
+    flashFeedback,
   ]);
 
   // Toggle true browser fullscreen
@@ -464,7 +487,9 @@ export const SoldierTrenchExperience: React.FC = () => {
     <div
       ref={containerRef}
       className={`relative w-full overflow-hidden select-none bg-stone-950 font-sans ${
-        isFullscreen ? 'fixed inset-0 z-50 h-screen w-screen' : 'h-[86vh] min-h-[640px] rounded-xl border border-stone-800'
+        isFullscreen
+          ? 'fixed inset-0 z-50 h-screen w-screen'
+          : 'h-[74vh] min-h-[460px] sm:min-h-[580px] sm:h-[82vh] lg:h-[86vh] max-h-[880px] rounded-xl border border-stone-800'
       }`}
     >
       {/* =========================================================================
@@ -540,6 +565,14 @@ export const SoldierTrenchExperience: React.FC = () => {
           <div className="absolute inset-0 pointer-events-none bg-orange-500/50 mix-blend-color-dodge transition-opacity duration-100" />
         )}
 
+        {/* =========================================================================
+            SISTEMA DE PARTÍCULAS (CANVAS): POEIRA E DETRITOS SUBINDO COM TREMOR CONCUSSIVO
+            ========================================================================= */}
+        <TrenchDebrisCanvas
+          ref={debrisCanvasRef}
+          shakeIntensity={dustParticlesEnabled ? screenShake : 'none'}
+        />
+
         {/* Dirt & Mud Splatter when an explosion hits nearby */}
         {dirtSplatter && (
           <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
@@ -583,46 +616,50 @@ export const SoldierTrenchExperience: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TOP SENSORY STATUS BAR (Vitals, Stance, Atmosphere)
+            TOP SENSORY STATUS BAR (Vitals, Stance, Atmosphere) - RESPONSIVE
             ========================================================================= */}
-        <div className="absolute top-0 inset-x-0 z-30 p-4 sm:p-6 flex items-center justify-between pointer-events-none">
-          {/* Soldier Vitals */}
-          <div className="flex items-center gap-3 sm:gap-4 pointer-events-auto">
+        <div className="absolute top-0 inset-x-0 z-30 p-2 sm:p-4 lg:p-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pointer-events-none">
+          {/* Soldier Vitals, Stance & Quick Environment */}
+          <div className="flex items-center justify-between sm:justify-start gap-1.5 sm:gap-3 pointer-events-auto">
             {/* Heartbeat Sensor */}
             <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-md border transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full backdrop-blur-md border transition-all ${
                 bpm > 110
                   ? 'bg-red-950/80 border-red-500 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.4)] animate-pulse'
                   : 'bg-stone-950/70 border-stone-700/80 text-stone-200'
               }`}
             >
-              <Heart className={`w-4 h-4 ${bpm > 100 ? 'text-red-400 fill-red-400' : 'text-stone-400'}`} />
+              <Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${bpm > 100 ? 'text-red-400 fill-red-400' : 'text-stone-400'}`} />
               <span className="font-mono text-xs sm:text-sm font-bold">{bpm} BPM</span>
             </div>
 
             {/* Stance Indicator */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-950/70 backdrop-blur-md border border-stone-700/80 text-xs sm:text-sm text-stone-200">
-              <Eye className="w-4 h-4 text-amber-400" />
-              <span className="font-semibold">
-                {isCrouched ? 'ABRIGADO' : 'OBSERVANDO PARAPEITO'}
+            <button
+              onClick={handleToggleStance}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-stone-950/70 backdrop-blur-md border border-stone-700/80 text-stone-200 hover:border-amber-500 transition-colors cursor-pointer"
+              title="Clique para alternar entre em pé e abrigado"
+            >
+              <Eye className="w-3.5 h-3.5 text-amber-400" />
+              <span className="font-semibold text-[11px] sm:text-xs">
+                {isCrouched ? 'ABRIGADO' : 'OBSERVANDO'}
               </span>
-            </div>
+            </button>
 
             {/* Environment Preset Selector */}
-            <div className="hidden sm:flex items-center gap-1 bg-stone-950/80 p-1 rounded-full border border-stone-700/80">
+            <div className="flex items-center gap-0.5 sm:gap-1 bg-stone-950/80 p-0.5 sm:p-1 rounded-full border border-stone-700/80 text-[10px] sm:text-xs">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setEnvironment('parapet-day');
                   setIsCrouched(false);
                 }}
-                className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
+                className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full font-medium transition-colors ${
                   environment === 'parapet-day'
                     ? 'bg-amber-600 text-stone-950 font-bold'
                     : 'text-stone-400 hover:text-stone-100'
                 }`}
               >
-                Terra de Ninguém
+                Terra
               </button>
               <button
                 onClick={(e) => {
@@ -630,13 +667,13 @@ export const SoldierTrenchExperience: React.FC = () => {
                   setEnvironment('night-flare');
                   setIsCrouched(false);
                 }}
-                className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
+                className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full font-medium transition-colors ${
                   environment === 'night-flare'
                     ? 'bg-amber-600 text-stone-950 font-bold'
                     : 'text-stone-400 hover:text-stone-100'
                 }`}
               >
-                Noite com Sinalizador
+                Noite
               </button>
               <button
                 onClick={(e) => {
@@ -644,19 +681,19 @@ export const SoldierTrenchExperience: React.FC = () => {
                   setEnvironment('dugout');
                   setIsCrouched(true);
                 }}
-                className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
+                className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full font-medium transition-colors ${
                   environment === 'dugout'
                     ? 'bg-amber-600 text-stone-950 font-bold'
                     : 'text-stone-400 hover:text-stone-100'
                 }`}
               >
-                Abrigo Dugout
+                Abrigo
               </button>
             </div>
           </div>
 
           {/* Quick Ambient & Fullscreen Toggles */}
-          <div className="flex items-center gap-2 pointer-events-auto">
+          <div className="flex items-center justify-end gap-1 sm:gap-2 pointer-events-auto">
             {/* Ambient Rain Toggle */}
             <button
               onClick={(e) => {
@@ -664,13 +701,13 @@ export const SoldierTrenchExperience: React.FC = () => {
                 toggleRain();
               }}
               title="Chuva na Trincheira"
-              className={`p-2 rounded-full border backdrop-blur-md transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-full border backdrop-blur-md transition-colors ${
                 ambientRain
                   ? 'bg-cyan-950/80 border-cyan-500 text-cyan-300'
                   : 'bg-stone-950/60 border-stone-800 text-stone-500'
               }`}
             >
-              <CloudRain className="w-4 h-4" />
+              <CloudRain className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             {/* Ambient Wind Toggle */}
@@ -680,13 +717,13 @@ export const SoldierTrenchExperience: React.FC = () => {
                 toggleWind();
               }}
               title="Vento da Frente"
-              className={`p-2 rounded-full border backdrop-blur-md transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-full border backdrop-blur-md transition-colors ${
                 ambientWind
                   ? 'bg-amber-950/80 border-amber-500 text-amber-300'
                   : 'bg-stone-950/60 border-stone-800 text-stone-500'
               }`}
             >
-              <Wind className="w-4 h-4" />
+              <Wind className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             {/* Ambient Artillery Rumble */}
@@ -696,13 +733,13 @@ export const SoldierTrenchExperience: React.FC = () => {
                 toggleArtillery();
               }}
               title="Bombardeio Distante"
-              className={`p-2 rounded-full border backdrop-blur-md transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-full border backdrop-blur-md transition-colors ${
                 ambientArtillery
                   ? 'bg-red-950/80 border-red-500 text-red-300'
                   : 'bg-stone-950/60 border-stone-800 text-stone-500'
               }`}
             >
-              <Flame className="w-4 h-4" />
+              <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             {/* Field Radio Morse */}
@@ -712,13 +749,13 @@ export const SoldierTrenchExperience: React.FC = () => {
                 toggleRadio();
               }}
               title="Rádio de Trincheira"
-              className={`p-2 rounded-full border backdrop-blur-md transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-full border backdrop-blur-md transition-colors ${
                 ambientRadio
                   ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
                   : 'bg-stone-950/60 border-stone-800 text-stone-500'
               }`}
             >
-              <Radio className="w-4 h-4" />
+              <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             {/* Haptic Vibration Toggle for Mobile Devices */}
@@ -734,14 +771,14 @@ export const SoldierTrenchExperience: React.FC = () => {
                 }
                 flashFeedback(next ? '📳 VIBRAÇÃO ATIVADA' : '📴 VIBRAÇÃO DESATIVADA');
               }}
-              title={hapticsEnabled ? 'Feedback Tátil Ativo (Vibração em Tremores Pesados)' : 'Feedback Tátil Desativado'}
-              className={`p-2 rounded-full border backdrop-blur-md transition-colors ${
+              title={hapticsEnabled ? 'Feedback Tátil Ativo' : 'Feedback Tátil Desativado'}
+              className={`p-1.5 sm:p-2 rounded-full border backdrop-blur-md transition-colors ${
                 hapticsEnabled
                   ? 'bg-amber-950/80 border-amber-500 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
                   : 'bg-stone-950/60 border-stone-800 text-stone-500'
               }`}
             >
-              {hapticsEnabled ? <Vibrate className="w-4 h-4" /> : <VibrateOff className="w-4 h-4" />}
+              {hapticsEnabled ? <Vibrate className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <VibrateOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
 
             {/* Atmospheric Fog Toggle */}
@@ -752,10 +789,10 @@ export const SoldierTrenchExperience: React.FC = () => {
               }}
               title={
                 atmosphericFog
-                  ? `Neblina Atmosférica: ${fogDensity === 'dense' ? 'Densa' : 'Normal'} (Clique para alternar)`
-                  : 'Neblina Atmosférica Desativada'
+                  ? `Neblina Atmosférica: ${fogDensity === 'dense' ? 'Densa' : 'Normal'}`
+                  : 'Neblina Desativada'
               }
-              className={`p-2 rounded-full border backdrop-blur-md transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-full border backdrop-blur-md transition-colors ${
                 atmosphericFog
                   ? fogDensity === 'dense'
                     ? 'bg-slate-800/90 border-slate-400 text-slate-100 shadow-[0_0_12px_rgba(203,213,225,0.35)]'
@@ -763,7 +800,39 @@ export const SoldierTrenchExperience: React.FC = () => {
                   : 'bg-stone-950/60 border-stone-800 text-stone-500'
               }`}
             >
-              <CloudFog className="w-4 h-4" />
+              <CloudFog className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </button>
+
+            {/* Dust & Debris Particles Toggle / Quick Shock Blast */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (e.shiftKey) {
+                  // Direct test blast if shift-clicked
+                  debrisCanvasRef.current?.triggerBlast('violent', { xRatio: 0.5 });
+                  triggerShake('violent', 1200);
+                  flashFeedback('💥 IMPACTO DE TESTE: POEIRA & DETRITOS!');
+                  return;
+                }
+                const next = !dustParticlesEnabled;
+                setDustParticlesEnabled(next);
+                if (next) {
+                  debrisCanvasRef.current?.triggerBlast('heavy', { xRatio: 0.5 });
+                }
+                flashFeedback(next ? '💨 POEIRA & DETRITOS ATIVADOS' : '💨 POEIRA & DETRITOS DESATIVADOS');
+              }}
+              title={
+                dustParticlesEnabled
+                  ? 'Sistema de Partículas: Poeira e Detritos Ativo (Clique para alternar / Shift+Clique para testar impacto)'
+                  : 'Sistema de Poeira e Detritos: Desativado'
+              }
+              className={`p-1.5 sm:p-2 rounded-full border backdrop-blur-md transition-colors ${
+                dustParticlesEnabled
+                  ? 'bg-amber-950/80 border-amber-600 text-amber-300 shadow-[0_0_12px_rgba(217,119,6,0.3)]'
+                  : 'bg-stone-950/60 border-stone-800 text-stone-500'
+              }`}
+            >
+              <Wind className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             {/* Fullscreen Button */}
@@ -773,21 +842,22 @@ export const SoldierTrenchExperience: React.FC = () => {
                 toggleFullscreen();
               }}
               title="Modo Imersão Total"
-              className="p-2 rounded-full bg-stone-950/80 hover:bg-stone-800 border border-stone-700 text-stone-200 backdrop-blur-md transition-colors"
+              className="p-1.5 sm:p-2 rounded-full bg-stone-950/80 hover:bg-stone-800 border border-stone-700 text-stone-200 backdrop-blur-md transition-colors"
             >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
           </div>
         </div>
 
-        {/* Subtle helper hint at bottom left (fades) */}
-        <div className="absolute bottom-28 left-6 hidden lg:block pointer-events-none opacity-60 text-[11px] text-stone-300 space-y-0.5">
+        {/* Subtle helper hint at bottom left (desktop only) */}
+        <div className="absolute bottom-24 left-6 hidden lg:block pointer-events-none opacity-60 text-[11px] text-stone-300 space-y-0.5">
           <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">Espaço / Clique</kbd> Atirar</div>
           <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">R</kbd> Sinalizador</div>
           <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">F</kbd> Projétil Rasante 3D</div>
           <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">M</kbd> Alerta Morteiro</div>
           <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">C</kbd> Agachar / Abrigo</div>
           <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">N</kbd> Neblina Atmosférica</div>
+          <div><kbd className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 rounded text-amber-400 font-mono">P</kbd> Poeira & Detritos</div>
         </div>
 
         {/* =========================================================================
@@ -795,94 +865,116 @@ export const SoldierTrenchExperience: React.FC = () => {
             ========================================================================= */}
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-0 inset-x-0 z-30 p-3 sm:p-5 bg-gradient-to-t from-stone-950 via-stone-950/90 to-transparent"
+          className="absolute bottom-0 inset-x-0 z-30 p-2 sm:p-3 md:p-4 bg-gradient-to-t from-stone-950 via-stone-950/90 to-transparent"
         >
-          <div className="mx-auto max-w-5xl flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
-            {/* 1. Fire Rifle */}
+          {/* Minimize / Maximize Controls toggle button */}
+          <div className="flex items-center justify-center mb-1">
             <button
-              onClick={handleFireRifle}
-              className="flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-95 text-stone-950 font-bold text-xs sm:text-sm shadow-lg shadow-amber-950/40 transition-transform"
+              onClick={() => setIsControlsCollapsed((prev) => !prev)}
+              className="px-2.5 py-0.5 rounded-full bg-stone-900/90 hover:bg-stone-800 border border-stone-700 text-[10px] text-stone-400 hover:text-amber-400 flex items-center gap-1 transition-colors backdrop-blur-md"
             >
-              <Crosshair className="w-4 h-4" />
-              <span>DISPARAR FUZIL</span>
-            </button>
-
-            {/* 2. Launch Flare */}
-            <button
-              onClick={handleLaunchFlare}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-amber-300 border border-amber-600/50 font-bold text-xs sm:text-sm shadow-md transition-transform"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>SINALIZADOR</span>
-            </button>
-
-            {/* 3. Bullet Whiz 3D */}
-            <button
-              onClick={handleBulletWhiz}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-red-400 border border-red-700/50 font-bold text-xs sm:text-sm shadow-md transition-transform"
-            >
-              <ShieldAlert className="w-4 h-4" />
-              <span>PROJÉTIL RASANTE!</span>
-            </button>
-
-            {/* 4. Incoming Mortar */}
-            <button
-              onClick={handleIncomingMortar}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-orange-400 border border-orange-700/50 font-bold text-xs sm:text-sm shadow-md transition-transform"
-            >
-              <Bomb className="w-4 h-4" />
-              <span>ALERTA MORTEIRO</span>
-            </button>
-
-            {/* 5. Hand Grenade */}
-            <button
-              onClick={handleThrowGrenade}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-stone-200 border border-stone-700 font-bold text-xs sm:text-sm shadow-md transition-transform"
-            >
-              <span>💣</span>
-              <span>GRANADA</span>
-            </button>
-
-            {/* 6. Stuka Dive */}
-            <button
-              onClick={handleStukaDive}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-yellow-400 border border-yellow-700/50 font-bold text-xs sm:text-sm shadow-md transition-transform"
-            >
-              <Plane className="w-4 h-4" />
-              <span>STUKA</span>
-            </button>
-
-            {/* 7. Artillery Salvo */}
-            <button
-              onClick={handleArtillerySalvo}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-red-300 border border-red-800/50 font-bold text-xs sm:text-sm shadow-md transition-transform"
-            >
-              <Flame className="w-4 h-4" />
-              <span>BARRAGEM</span>
-            </button>
-
-            {/* 8. Mud footsteps */}
-            <button
-              onClick={handleMudSteps}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-stone-900/80 hover:bg-stone-800 active:scale-95 text-stone-300 border border-stone-800 text-xs sm:text-sm transition-transform"
-            >
-              <Footprints className="w-4 h-4" />
-              <span>PASSOS</span>
-            </button>
-
-            {/* 9. Duck / Crouch into Dugout */}
-            <button
-              onClick={handleToggleStance}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border transition-all ${
-                isCrouched
-                  ? 'bg-amber-700 text-stone-950 border-amber-500'
-                  : 'bg-stone-900/90 text-stone-200 border-stone-700 hover:bg-stone-800'
-              }`}
-            >
-              {isCrouched ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              <span>{isCrouched ? 'LEVANTAR' : 'ABAIXAR / ABRIGO'}</span>
+              {isControlsCollapsed ? (
+                <>
+                  <ChevronUp className="w-3 h-3 text-amber-400" />
+                  <span>Exibir Controles de Combate</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3 h-3" />
+                  <span>Ocultar Controles (Vista Limpa)</span>
+                </>
+              )}
             </button>
           </div>
+
+          {!isControlsCollapsed && (
+            <div className="mx-auto max-w-5xl grid grid-cols-3 sm:flex sm:flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+              {/* 1. Fire Rifle */}
+              <button
+                onClick={handleFireRifle}
+                className="flex items-center justify-center gap-1 px-2 sm:px-3.5 py-2 sm:py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 active:scale-95 text-stone-950 font-bold text-[11px] sm:text-xs md:text-sm shadow-lg shadow-amber-950/40 transition-transform"
+              >
+                <Crosshair className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">FUZIL</span>
+              </button>
+
+              {/* 2. Launch Flare */}
+              <button
+                onClick={handleLaunchFlare}
+                className="flex items-center justify-center gap-1 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-amber-300 border border-amber-600/50 font-bold text-[11px] sm:text-xs md:text-sm shadow-md transition-transform"
+              >
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">SINALIZADOR</span>
+              </button>
+
+              {/* 3. Bullet Whiz 3D */}
+              <button
+                onClick={handleBulletWhiz}
+                className="flex items-center justify-center gap-1 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-red-400 border border-red-700/50 font-bold text-[11px] sm:text-xs md:text-sm shadow-md transition-transform"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">RASANTE 3D</span>
+              </button>
+
+              {/* 4. Incoming Mortar */}
+              <button
+                onClick={handleIncomingMortar}
+                className="flex items-center justify-center gap-1 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-orange-400 border border-orange-700/50 font-bold text-[11px] sm:text-xs md:text-sm shadow-md transition-transform"
+              >
+                <Bomb className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">MORTEIRO</span>
+              </button>
+
+              {/* 5. Hand Grenade */}
+              <button
+                onClick={handleThrowGrenade}
+                className="flex items-center justify-center gap-1 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-stone-200 border border-stone-700 font-bold text-[11px] sm:text-xs md:text-sm shadow-md transition-transform"
+              >
+                <span className="text-xs">💣</span>
+                <span className="truncate">GRANADA</span>
+              </button>
+
+              {/* 6. Stuka Dive */}
+              <button
+                onClick={handleStukaDive}
+                className="flex items-center justify-center gap-1 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-yellow-400 border border-yellow-700/50 font-bold text-[11px] sm:text-xs md:text-sm shadow-md transition-transform"
+              >
+                <Plane className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">STUKA</span>
+              </button>
+
+              {/* 7. Artillery Salvo */}
+              <button
+                onClick={handleArtillerySalvo}
+                className="flex items-center justify-center gap-1 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-stone-900/90 hover:bg-stone-800 active:scale-95 text-red-300 border border-red-800/50 font-bold text-[11px] sm:text-xs md:text-sm shadow-md transition-transform"
+              >
+                <Flame className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">BARRAGEM</span>
+              </button>
+
+              {/* 8. Mud footsteps */}
+              <button
+                onClick={handleMudSteps}
+                className="flex items-center justify-center gap-1 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-stone-900/80 hover:bg-stone-800 active:scale-95 text-stone-300 border border-stone-800 text-[11px] sm:text-xs md:text-sm transition-transform"
+              >
+                <Footprints className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">PASSOS</span>
+              </button>
+
+              {/* 9. Duck / Crouch into Dugout */}
+              <button
+                onClick={handleToggleStance}
+                className={`flex items-center justify-center gap-1 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg font-bold text-[11px] sm:text-xs md:text-sm border transition-all ${
+                  isCrouched
+                    ? 'bg-amber-700 text-stone-950 border-amber-500'
+                    : 'bg-stone-900/90 text-stone-200 border-stone-700 hover:bg-stone-800'
+                }`}
+              >
+                {isCrouched ? <ChevronUp className="w-3.5 h-3.5 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0" />}
+                <span className="truncate">{isCrouched ? 'LEVANTAR' : 'ABRIGO'}</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

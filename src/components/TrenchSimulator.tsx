@@ -24,6 +24,7 @@ import {
   monteCasteloImg,
 } from '../data/ww2HistoricalData';
 import { SoundTriggerGrid } from './SoundTriggerGrid';
+import { TrenchDebrisCanvas, TrenchDebrisCanvasRef } from './TrenchDebrisCanvas';
 
 interface TrenchSimulatorProps {
   onOpenDetails: (item: SoundItem) => void;
@@ -47,6 +48,7 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
   const [reverbMix, setReverbMix] = useState<number>(0.42);
   const [activePlayingId, setActivePlayingId] = useState<string | null>(null);
   const [isShaking, setIsShaking] = useState(false);
+  const [shakeIntensity, setShakeIntensity] = useState<'none' | 'light' | 'heavy' | 'violent'>('none');
   const [showMuzzleFlash, setShowMuzzleFlash] = useState(false);
   const [lastSoundNotice, setLastSoundNotice] = useState<string>('Pronto para simulação sonora. Clique em qualquer arma ou veículo.');
 
@@ -58,6 +60,7 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
 
   // Canvas refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const debrisCanvasRef = useRef<TrenchDebrisCanvasRef>(null);
   const visualizerCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Background image mapping
@@ -266,15 +269,37 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
     setActivePlayingId(item.id);
     setLastSoundNotice(`Disparando som de: ${item.name} (${item.subtitle})`);
 
-    // Screen effects
-    if (item.category === 'artillery' || item.category === 'tanks') {
+    // Concussive Screen & Particle Effects
+    const isHeavyBlast =
+      item.category === 'artillery' ||
+      item.category === 'tanks' ||
+      item.soundAction === 'grenade' ||
+      item.soundAction === 'mortar' ||
+      item.soundAction === 'navalBombardment' ||
+      item.soundAction === 'katyusha';
+
+    if (isHeavyBlast) {
+      const isViolent =
+        item.soundAction === 'navalBombardment' ||
+        item.soundAction === 'katyusha' ||
+        (distance === 'near' && (item.soundAction === 'howitzer105' || item.soundAction === 'mortar' || item.soundAction === 'tiger1'));
+      
+      const intensity: 'heavy' | 'violent' = isViolent ? 'violent' : 'heavy';
       setIsShaking(true);
+      setShakeIntensity(intensity);
+
+      const xRatio = Math.max(0.1, Math.min(0.9, 0.5 + pan * 0.45));
+      debrisCanvasRef.current?.triggerBlast(intensity, { xRatio });
+
       if (typeof window !== 'undefined' && 'navigator' in window && typeof navigator.vibrate === 'function') {
         try {
-          navigator.vibrate([180, 60, 140]);
+          navigator.vibrate(isViolent ? [220, 70, 160, 50, 240] : [180, 60, 140]);
         } catch {}
       }
-      setTimeout(() => setIsShaking(false), 500);
+      setTimeout(() => {
+        setIsShaking(false);
+        setShakeIntensity('none');
+      }, isViolent ? 1100 : 600);
     }
     if (item.category === 'weapons') {
       setShowMuzzleFlash(true);
@@ -338,7 +363,15 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
   };
 
   return (
-    <div className={`space-y-8 ${isShaking ? 'animate-trench-shake' : ''}`}>
+    <div
+      className={`space-y-8 transition-transform duration-75 ${
+        isShaking
+          ? shakeIntensity === 'violent'
+            ? 'animate-shake-violent'
+            : 'animate-shake-heavy'
+          : ''
+      }`}
+    >
       {/* Hero Visual Trench Diorama */}
       <div className="relative overflow-hidden rounded-xl border border-stone-800 bg-stone-900 shadow-2xl">
         <div className="relative h-80 sm:h-96 md:h-[420px] w-full overflow-hidden">
@@ -375,6 +408,12 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
             className="pointer-events-none absolute inset-0 h-full w-full"
           />
 
+          {/* Sistema de Partículas: Poeira e Detritos Subindo em Impactos Pesados/Violentos */}
+          <TrenchDebrisCanvas
+            ref={debrisCanvasRef}
+            shakeIntensity={shakeIntensity}
+          />
+
           {/* Muzzle flash overlay */}
           {showMuzzleFlash && (
             <div className="pointer-events-none absolute inset-0 bg-amber-400/20 mix-blend-screen animate-muzzle-flash" />
@@ -388,68 +427,71 @@ export const TrenchSimulator: React.FC<TrenchSimulatorProps> = ({
             </div>
           </div>
 
-          {/* Top Left: Real-time Audio Spectrum & Radar HUD */}
-          <div className="absolute top-4 left-4 z-10 p-2 rounded-lg bg-stone-950/85 backdrop-blur-md border border-stone-800 flex items-center gap-3">
-            <div className="flex flex-col">
-              <span className="text-[10px] uppercase tracking-wider text-stone-400 font-mono flex items-center gap-1">
-                <Activity className="h-3 w-3 text-amber-500" />
-                Radar Acústico
-              </span>
-              <span className="text-[10px] text-stone-500 font-mono">
-                {isBinaural ? 'Modo HRTF 3D' : 'Estéreo Padrão'}
-              </span>
+          {/* Top Bar: Real-time Audio Spectrum & Radar HUD + Environment Selector (Responsive & Non-overlapping) */}
+          <div className="absolute top-2.5 sm:top-4 inset-x-2.5 sm:inset-x-4 z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pointer-events-none">
+            {/* Top Left: Real-time Audio Spectrum & Radar HUD */}
+            <div className="p-1.5 sm:p-2 rounded-lg bg-stone-950/85 backdrop-blur-md border border-stone-800 flex items-center gap-2 sm:gap-3 pointer-events-auto shadow-md">
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase tracking-wider text-stone-400 font-mono flex items-center gap-1">
+                  <Activity className="h-3 w-3 text-amber-500" />
+                  Radar Acústico
+                </span>
+                <span className="text-[10px] text-stone-500 font-mono">
+                  {isBinaural ? 'Modo HRTF 3D' : 'Estéreo Padrão'}
+                </span>
+              </div>
+              <canvas
+                ref={visualizerCanvasRef}
+                width={100}
+                height={26}
+                className="rounded bg-stone-900 border border-stone-800"
+              />
             </div>
-            <canvas
-              ref={visualizerCanvasRef}
-              width={100}
-              height={26}
-              className="rounded bg-stone-900 border border-stone-800"
-            />
-          </div>
 
-          {/* Environment Selector Strip on Top Right */}
-          <div className="absolute top-4 right-4 z-10 flex flex-wrap items-center gap-1.5 p-1 rounded-lg bg-stone-950/80 backdrop-blur-md border border-stone-800 text-xs">
-            <span className="hidden sm:inline px-2 text-stone-400">Posto:</span>
-            <button
-              onClick={() => setEnvironment('standard')}
-              className={`px-2.5 py-1 rounded transition-colors ${
-                environment === 'standard'
-                  ? 'bg-amber-600 text-stone-100 font-semibold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              Linha Padrão
-            </button>
-            <button
-              onClick={() => setEnvironment('stalingrad')}
-              className={`px-2.5 py-1 rounded transition-colors ${
-                environment === 'stalingrad'
-                  ? 'bg-amber-600 text-stone-100 font-semibold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              Stalingrado
-            </button>
-            <button
-              onClick={() => setEnvironment('normandy')}
-              className={`px-2.5 py-1 rounded transition-colors ${
-                environment === 'normandy'
-                  ? 'bg-amber-600 text-stone-100 font-semibold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              Normandia
-            </button>
-            <button
-              onClick={() => setEnvironment('monte-castelo')}
-              className={`px-2.5 py-1 rounded transition-colors ${
-                environment === 'monte-castelo'
-                  ? 'bg-amber-600 text-stone-100 font-semibold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              Monte Castelo (FEB)
-            </button>
+            {/* Environment Selector Strip on Top Right */}
+            <div className="flex flex-wrap items-center gap-1 p-1 rounded-lg bg-stone-950/85 backdrop-blur-md border border-stone-800 text-xs pointer-events-auto shadow-md">
+              <span className="hidden sm:inline px-1.5 text-stone-400 text-[11px]">Posto:</span>
+              <button
+                onClick={() => setEnvironment('standard')}
+                className={`px-2 sm:px-2.5 py-1 rounded transition-colors text-xs ${
+                  environment === 'standard'
+                    ? 'bg-amber-600 text-stone-100 font-semibold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                Linha Padrão
+              </button>
+              <button
+                onClick={() => setEnvironment('stalingrad')}
+                className={`px-2 sm:px-2.5 py-1 rounded transition-colors text-xs ${
+                  environment === 'stalingrad'
+                    ? 'bg-amber-600 text-stone-100 font-semibold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                Stalingrado
+              </button>
+              <button
+                onClick={() => setEnvironment('normandy')}
+                className={`px-2 sm:px-2.5 py-1 rounded transition-colors text-xs ${
+                  environment === 'normandy'
+                    ? 'bg-amber-600 text-stone-100 font-semibold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                Normandia
+              </button>
+              <button
+                onClick={() => setEnvironment('monte-castelo')}
+                className={`px-2 sm:px-2.5 py-1 rounded transition-colors text-xs ${
+                  environment === 'monte-castelo'
+                    ? 'bg-amber-600 text-stone-100 font-semibold'
+                    : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                Monte Castelo
+              </button>
+            </div>
           </div>
 
           {/* Bottom Diorama Overlay: Current Status & Coordinated Simulation CTA */}

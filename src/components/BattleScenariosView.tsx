@@ -135,7 +135,7 @@ export const BattleScenariosView: React.FC = () => {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/60 to-black/30" />
 
-          <div className="absolute bottom-0 inset-x-0 p-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div className="absolute bottom-0 inset-x-0 p-4 sm:p-6 flex flex-col md:flex-row md:items-end justify-between gap-3 sm:gap-4">
             <div className="max-w-2xl">
               <div className="flex items-center gap-2 text-xs text-amber-400 mb-1">
                 <MapPin className="h-3.5 w-3.5" />
